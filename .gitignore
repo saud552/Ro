@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Environments / secrets
+.env
+
+# SQLite and local db
+*.sqlite3
+*.sqlite
+
+# VSCode / editors
+.vscode/
+.idea/

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install alembic
+      - name: Run migrations
+        env:
+          DATABASE_URL: sqlite+aiosqlite:///./ci.sqlite3
+          PYTHONPATH: .
+        run: alembic upgrade head
+      - name: Static compile check
+        env:
+          PYTHONPATH: .
+        run: python -m py_compile $(git ls-files '*.py')
+      - name: Ruff lint
+        run: |
+          pip install ruff==0.6.1
+          ruff --version
+          ruff check --line-length=100 --target-version=py311 --ignore=E501 .
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Black/Isort check
+        run: |
+          black --version
+          isort --version
+          black --check --line-length=100 .
+          isort --check-only --profile=black --line-length=100 .
+      - name: Mypy
+        env:
+          PYTHONPATH: .
+        run: mypy
+      - name: Security scan
+        run: |
+          bandit -q -r app || true
+          safety check --full-report || true
+      - name: Run pre-commit (optional)
+        continue-on-error: true
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files || true
+      - name: Run tests
+        env:
+          PYTHONPATH: .
+        run: pytest -q --maxfail=1 --disable-warnings --cov=app --cov-report=term-missing
