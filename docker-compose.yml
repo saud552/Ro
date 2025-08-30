@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      PYTHONPATH: /app
+    command: ["alembic", "upgrade", "head"]
+
+  bot:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      # Core
+      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_CHANNEL: ${BOT_CHANNEL}
+      ADMIN_IDS: ${ADMIN_IDS:-}
+      # Storage
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+      # Runtime
+      WEBAPP_HOST: 0.0.0.0
+      WEBAPP_PORT: 8080
+      # Webhook mode (optional)
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+      WEBHOOK_PATH_TEMPLATE: ${WEBHOOK_PATH_TEMPLATE:-/webhook/{token}}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+    ports:
+      - "8080:8080"
+    command: ["python", "-m", "app"]
+
+  # Optional: Traefik reverse proxy for webhook mode (set WEBHOOK_URL accordingly)
+  # traefik:
+  #   image: traefik:v3.1
+  #   command:
+  #     - "--providers.docker=true"
+  #     - "--entrypoints.web.address=:80"
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+volumes:
+  db_data:
