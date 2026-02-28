@@ -9,21 +9,13 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     """Arabic Main Menu with all 8 requested sections."""
     buttons = [
         [InlineKeyboardButton(text="🎰 قسم الروليت", callback_data="section_roulette")],
-        [InlineKeyboardButton(text="🗳️ قسم مسابقات التصويت", callback_data="section_voting")],
+        [InlineKeyboardButton(text="🗳️ قسم مسابقات التصويت", callback_data="section_vote")],
         [InlineKeyboardButton(text="🏆 مسابقة 'يستحق'", callback_data="section_yastahiq")],
         [InlineKeyboardButton(text="❓ قسم مسابقة الأسئلة", callback_data="section_quiz")],
-        [
-            InlineKeyboardButton(
-                text="⚙️ إدارة المجموعات أو القنوات", callback_data="section_manage_chats"
-            )
-        ],
-        [InlineKeyboardButton(text="💎 قسم إدارة الاشتراك", callback_data="section_subscription")],
-        [
-            InlineKeyboardButton(
-                text="📊 إدارة سحوباتي ومسابقاتي", callback_data="section_my_contests"
-            )
-        ],
-        [InlineKeyboardButton(text="💰 قسم كسب النقاط", callback_data="section_points")],
+        [InlineKeyboardButton(text="⚙️ إدارة مسابقاتي", callback_data="my_draws")],
+        [InlineKeyboardButton(text="💎 متجر النقاط واشتراكاتي", callback_data="section_store")],
+        [InlineKeyboardButton(text="📊 حسابي", callback_data="section_account")],
+        [InlineKeyboardButton(text="💰 كسب النقاط", callback_data="section_referral")],
         [InlineKeyboardButton(text="👨‍💻 الدعم الفني", url="https://t.me/support")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)

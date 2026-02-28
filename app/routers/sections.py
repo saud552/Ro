@@ -147,3 +147,57 @@ async def back_to_main(cb: CallbackQuery) -> None:
         reply_markup=main_menu_kb(),
     )
     await cb.answer()
+
+@sections_router.callback_query(F.data == "section_store")
+async def section_store(cb: CallbackQuery) -> None:
+    # Costs in points
+    price_once = 50
+    price_month = 200
+
+    async for session in get_async_session():
+        stmt = select(User).where(User.id == cb.from_user.id)
+        user = (await session.execute(stmt)).scalar_one()
+        points = user.points
+
+    text = (
+        "🛒 <b>متجر النقاط</b>\n\n"
+        f"💎 رصيدك الحالي: <b>{points}</b> نقطة\n\n"
+        "يمكنك استبدال نقاطك بميزات المسابقات:\n"
+        f"1️⃣ إنشاء مسابقة واحدة: <b>{price_once}</b> نقطة\n"
+        f"2️⃣ اشتراك شهري كامل: <b>{price_month}</b> نقطة\n\n"
+        "<i>(النقاط تُكتسب عبر دعوة الأصدقاء)</i>"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"شراء مسابقة ({price_once}ن)", callback_data="buy_points_once")],
+            [InlineKeyboardButton(text=f"اشتراك شهري ({price_month}ن)", callback_data="buy_points_month")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.answer()
+
+@sections_router.callback_query(F.data.startswith("buy_points_"))
+async def buy_with_points(cb: CallbackQuery) -> None:
+    mode = cb.data.replace("buy_points_", "")
+    cost = 50 if mode == "once" else 200
+
+    async for session in get_async_session():
+        stmt = select(User).where(User.id == cb.from_user.id)
+        user = (await session.execute(stmt)).scalar_one()
+
+        if user.points < cost:
+            await cb.answer("⚠️ رصيد نقاطك غير كافٍ!", show_alert=True)
+            return
+
+        user.points -= cost
+        from ..services.payments import grant_monthly, grant_one_time
+        if mode == "once":
+            await grant_one_time(cb.from_user.id, credits=1)
+        else:
+            await grant_monthly(cb.from_user.id)
+
+        await session.commit()
+
+    await cb.message.answer(f"✅ تمت العملية بنجاح! تم خصم {cost} نقطة وتفعيل الميزة.")
+    await cb.answer()

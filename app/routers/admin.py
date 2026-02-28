@@ -272,3 +272,27 @@ async def admin_apply_bot_channel(message: Message, state: FSMContext) -> None:
         await session.commit()
     await state.clear()
     await message.answer(f"✅ تم تعيين قناة البوت الأساسية إلى: {value}", reply_markup=admin_menu_kb())
+
+@admin_router.callback_query(F.data == "admin_quiz_manage")
+async def admin_quiz_manage(cb: CallbackQuery) -> None:
+    if not _is_admin(cb.from_user.id):
+        await cb.answer()
+        return
+    text = (
+        "🧠 <b>إدارة بنك الأسئلة</b>\n\n"
+        "يمكنك رفع الأسئلة بشكل جماعي عبر إرسال نص بالتنسيق التالي:\n"
+        "<code>السؤال | الإجابة1, الإجابة2 | النقاط</code>\n\n"
+        "مثال:\n"
+        "<code>ما هي عاصمة السعودية | الرياض | 2</code>"
+    )
+    await cb.message.answer(text, parse_mode=ParseMode.HTML)
+    await cb.answer()
+
+@admin_router.message(F.text.contains("|") & F.from_user.id.in_(settings.admin_ids))
+async def admin_bulk_add_questions(message: Message) -> None:
+    async for session in get_async_session():
+        from ..services.quiz import QuizService
+        service = QuizService(session)
+        # Assuming 0 as general bank for now
+        count = await service.bulk_add_questions(0, message.text)
+        await message.answer(f"✅ تم إضافة {count} سؤال لبنك الأسئلة بنجاح.")
