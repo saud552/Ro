@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+from typing import Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..db.models import Contest, ContestEntry, ContestType, Vote, VoteMode
+from ..db.repositories import ContestEntryRepository, ContestRepository, VoteRepository
+
+
+class VotingService:
+    """Service to handle voting logic (Normal, Stars, and Dual mode)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.contest_repo = ContestRepository(session)
+        self.entry_repo = ContestEntryRepository(session)
+        self.vote_repo = VoteRepository(session)
+
+    async def register_contestant(
+        self, contest_id: int, user_id: int, entry_name: str
+    ) -> ContestEntry:
+        """Register a user as a contestant in a voting contest."""
+        import secrets
+
+        unique_code = secrets.token_hex(4)
+
+        entry = ContestEntry(
+            contest_id=contest_id, user_id=user_id, entry_name=entry_name, unique_code=unique_code
+        )
+        self.session.add(entry)
+        await self.session.commit()
+        return entry
+
+    async def add_vote(
+        self,
+        contest_id: int,
+        entry_id: int,
+        voter_id: int,
+        is_stars: bool = False,
+        stars_amount: int = 0,
+    ) -> bool:
+        """Add a vote to a contestant, handling normal and stars modes."""
+        contest = await self.contest_repo.get_by_id(contest_id)
+        if not contest or not contest.is_open:
+            return False
+
+        # Check for multiple votes if prevented
+        if contest.prevent_multiple_votes and not is_stars:
+            if await self.vote_repo.has_voted(contest_id, voter_id):
+                return False
+
+        entry = await self.entry_repo.get_by_id(entry_id)
+        if not entry:
+            return False
+
+        # Create vote record
+        vote = Vote(
+            contest_id=contest_id,
+            entry_id=entry_id,
+            voter_id=voter_id,
+            is_stars=is_stars,
+            stars_amount=stars_amount,
+        )
+        self.session.add(vote)
+
+        # Update entry counts
+        if is_stars:
+            entry.stars_received += stars_amount
+            # Increment votes based on ratio (default 1 star = 2 votes)
+            entry.votes_count += stars_amount * contest.star_to_vote_ratio
+        else:
+            entry.votes_count += 1
+
+        await self.session.commit()
+        return True
+
+    async def get_total_stars(self, contest_id: int) -> int:
+        """Calculate total stars received in a contest."""
+        from sqlalchemy import func, select
+
+        stmt = select(func.sum(Vote.stars_amount)).where(
+            Vote.contest_id == contest_id, Vote.is_stars.is_(True)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0

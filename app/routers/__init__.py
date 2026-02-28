@@ -8,12 +8,14 @@ from .roulette import roulette_router
 from .sections import sections_router
 from .start import start_router
 from .system import system_router
+from .voting import voting_router
 
 
 # ملخص: تسجيل جميع الراوترات ضمن الـ Dispatcher.
 def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(start_router)
     dp.include_router(roulette_router)
+    dp.include_router(voting_router)
     dp.include_router(sections_router)
     dp.include_router(admin_router)
     dp.include_router(system_router)
