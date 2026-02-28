@@ -49,6 +49,8 @@ from ..keyboards.common import (
     gates_manage_kb,
 )
 from ..keyboards.my import manage_draw_kb
+from ..keyboards.settings import roulette_settings_kb
+from ..services.antibot import AntiBotService
 from ..services.context import runtime
 from ..services.formatting import StyledText, parse_style_from_text
 from ..services.payments import grant_monthly, grant_one_time, has_gate_access, log_purchase
@@ -66,7 +68,12 @@ class CreateRoulette(StatesGroup):
     await_text = State()
     await_gate_choice = State()
     await_winners = State()
+    await_settings = State()
     await_confirm = State()
+
+
+class RouletteFlow(StatesGroup):
+    await_antibot = State()
 
 
 @dataclass
@@ -415,6 +422,19 @@ async def go_back(cb: CallbackQuery, state: FSMContext) -> None:
         await cb.answer()
         return
     if cur == CreateRoulette.await_confirm:
+        await state.set_state(CreateRoulette.await_settings)
+        await cb.message.answer(
+            "تخصيص إعدادات المسابقة:",
+            reply_markup=roulette_settings_kb(
+                data.get("is_premium_only", False),
+                data.get("sub_check_disabled", False),
+                data.get("anti_bot_enabled", True),
+                data.get("exclude_leavers_enabled", True),
+            ),
+        )
+        await cb.answer()
+        return
+    if cur == CreateRoulette.await_settings:
         await state.set_state(CreateRoulette.await_winners)
         await cb.message.answer("أدخل عدد الفائزين:", reply_markup=back_kb())
         await cb.answer()
@@ -635,7 +655,7 @@ async def gate_pick_apply(cb: CallbackQuery, state: FSMContext) -> None:
     gates = list(data.get("gate_channels", []))
     gates.append({"channel_id": chat_id, "channel_title": title, "invite_link": invite_link})
     await state.update_data(gate_channels=gates)
-    await cb.message.answer("تمت إضافة الشرط ✅", reply_markup=gates_manage_kb(len(gates)))
+    await message.answer("تمت إضافة الشرط ✅", reply_markup=gates_manage_kb(len(gates)))
     await cb.answer()
 
 
@@ -671,13 +691,63 @@ async def collect_winners(message: Message, state: FSMContext) -> None:
         return
     count = max(1, min(100, val))
     await state.update_data(winners=count)
-    await state.set_state(CreateRoulette.await_confirm)
+    await state.set_state(CreateRoulette.await_settings)
     data = await state.get_data()
-    styled = StyledText(data["text_raw"], data["style"]).render()
     await message.answer(
-        f"تأكيد إنشاء السحب:\nالنص:\n{styled}\nعدد الفائزين: {count}",
-        reply_markup=confirm_cancel_kb(),
+        "تخصيص إعدادات المسابقة:",
+        reply_markup=roulette_settings_kb(
+            data.get("is_premium_only", False),
+            data.get("sub_check_disabled", False),
+            data.get("anti_bot_enabled", True),
+            data.get("exclude_leavers_enabled", True),
+        ),
     )
+
+
+@roulette_router.callback_query(F.data.startswith("toggle_"))
+async def toggle_settings(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    if cb.data == "toggle_premium":
+        val = not data.get("is_premium_only", False)
+        await state.update_data(is_premium_only=val)
+    elif cb.data == "toggle_sub_check":
+        val = not data.get("sub_check_disabled", False)
+        await state.update_data(sub_check_disabled=val)
+    elif cb.data == "toggle_anti_bot":
+        val = not data.get("anti_bot_enabled", True)
+        await state.update_data(anti_bot_enabled=val)
+    elif cb.data == "toggle_leavers":
+        val = not data.get("exclude_leavers_enabled", True)
+        await state.update_data(exclude_leavers_enabled=val)
+
+    # Refresh keyboard
+    data = await state.get_data()
+    await cb.message.edit_reply_markup(
+        reply_markup=roulette_settings_kb(
+            data.get("is_premium_only", False),
+            data.get("sub_check_disabled", False),
+            data.get("anti_bot_enabled", True),
+            data.get("exclude_leavers_enabled", True),
+        )
+    )
+    await cb.answer()
+
+
+@roulette_router.callback_query(F.data == "confirm_settings")
+async def confirm_settings(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.set_state(CreateRoulette.await_confirm)
+    styled = StyledText(data["text_raw"], data["style"]).render()
+    text = (
+        f"✅ تأكيد إنشاء السحب:\n\n"
+        f"📝 النص: {styled}\n"
+        f"🏆 عدد الفائزين: {data['winners']}\n"
+        f"💎 للمميزين فقط: {'نعم' if data.get('is_premium_only') else 'لا'}\n"
+        f"🤖 منع الوهمي: {'مفعل' if data.get('anti_bot_enabled', True) else 'معطل'}\n"
+        f"🏃 استبعاد المغادرين: {'نعم' if data.get('exclude_leavers_enabled', True) else 'لا'}"
+    )
+    await cb.message.answer(text, reply_markup=confirm_cancel_kb(), parse_mode=ParseMode.HTML)
+    await cb.answer()
 
 
 @roulette_router.callback_query(F.data == "confirm_create")
@@ -695,6 +765,10 @@ async def confirm_create_cb(cb: CallbackQuery, state: FSMContext) -> None:
             text_raw=data["text_raw"],
             text_style=data["style"],
             winners_count=data["winners"],
+            is_premium_only=data.get("is_premium_only", False),
+            sub_check_disabled=data.get("sub_check_disabled", False),
+            anti_bot_enabled=data.get("anti_bot_enabled", True),
+            exclude_leavers_enabled=data.get("exclude_leavers_enabled", True),
             is_open=True,
         )
         session.add(contest)
@@ -737,7 +811,7 @@ async def confirm_create_cb(cb: CallbackQuery, state: FSMContext) -> None:
 
 
 @roulette_router.callback_query(F.data.startswith("join:"))
-async def join(cb: CallbackQuery) -> None:
+async def join(cb: CallbackQuery, state: FSMContext) -> None:
     if not await _allow(cb.from_user.id, "join"):
         await cb.answer("رجاءً أعد المحاولة لاحقاً", show_alert=True)
         return
@@ -750,17 +824,23 @@ async def join(cb: CallbackQuery) -> None:
             await cb.answer("المشاركة مغلقة", show_alert=True)
             return
 
-        # 1. Ensure channel membership
-        try:
-            m = await cb.bot.get_chat_member(c.channel_id, cb.from_user.id)
-            if getattr(m, "status", None) not in {"member", "creator", "administrator"}:
-                await cb.answer("يرجى الاشتراك في القناة أولاً", show_alert=True)
-                return
-        except Exception:
-            await cb.answer("يرجى الاشتراك في القناة أولاً", show_alert=True)
+        # 1. Premium check
+        if c.is_premium_only and not cb.from_user.is_premium:
+            await cb.answer("⚠️ هذا السحب مخصص لمستخدمي Telegram Premium فقط!", show_alert=True)
             return
 
-        # 2. Ensure gate membership
+        # 2. Channel membership check (if not disabled)
+        if not c.sub_check_disabled:
+            try:
+                m = await cb.bot.get_chat_member(c.channel_id, cb.from_user.id)
+                if getattr(m, "status", None) not in {"member", "creator", "administrator"}:
+                    await cb.answer("يرجى الاشتراك في القناة أولاً", show_alert=True)
+                    return
+            except Exception:
+                await cb.answer("يرجى الاشتراك في القناة أولاً", show_alert=True)
+                return
+
+        # 3. Gate membership check
         gate_rows = (
             (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id)))
             .scalars()
@@ -777,41 +857,85 @@ async def join(cb: CallbackQuery) -> None:
                     await cb.answer(f"يرجى الاشتراك في {gate.channel_title}", show_alert=True)
                     return
 
-        existing = (
-            await session.execute(
-                select(ContestEntry).where(
-                    ContestEntry.contest_id == contest_id, ContestEntry.user_id == cb.from_user.id
-                )
-            )
-        ).scalar_one_or_none()
-
-        if existing is None:
+        # 4. Anti-bot logic
+        if c.anti_bot_enabled:
+            challenge_text, correct_answer = AntiBotService.generate_math_challenge()
+            await state.set_state(RouletteFlow.await_antibot)
+            await state.update_data(correct_ans=correct_answer, cid=contest_id)
             try:
-                session.add(ContestEntry(contest_id=contest_id, user_id=cb.from_user.id))
-                await session.commit()
-            except IntegrityError:
-                await session.rollback()
+                await cb.bot.send_message(
+                    cb.from_user.id,
+                    challenge_text,
+                    reply_markup=AntiBotService.get_challenge_keyboard(correct_answer),
+                )
+                await cb.answer("يرجى مراجعة خاص البوت لإكمال التحقق", show_alert=True)
+            except Exception:
+                await cb.answer("يرجى بدء المحادثة مع البوت أولاً في الخاص", show_alert=True)
+            return
 
-        count = (
-            await session.execute(
-                select(func.count())
-                .select_from(ContestEntry)
-                .where(ContestEntry.contest_id == contest_id)
-            )
-        ).scalar_one()
+        # Success path if no anti-bot
+        await _complete_join(cb, c, session)
 
-        gate_links = [(g.channel_title, g.invite_link) for g in gate_rows if g.invite_link]
-        with suppress(Exception):
-            await cb.bot.edit_message_text(
-                chat_id=c.channel_id,
-                message_id=c.message_id,
-                text=_build_channel_post_text(c, count),
-                reply_markup=roulette_controls_kb(
-                    c.id, c.is_open, runtime.bot_username, gate_links, False
-                ),
-                parse_mode=ParseMode.HTML,
+
+async def _complete_join(cb: CallbackQuery, c: Contest, session):
+    existing = (
+        await session.execute(
+            select(ContestEntry).where(
+                ContestEntry.contest_id == c.id, ContestEntry.user_id == cb.from_user.id
             )
+        )
+    ).scalar_one_or_none()
+
+    if existing is None:
+        try:
+            session.add(ContestEntry(contest_id=c.id, user_id=cb.from_user.id))
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+
+    count = (
+        await session.execute(
+            select(func.count()).select_from(ContestEntry).where(ContestEntry.contest_id == c.id)
+        )
+    ).scalar_one()
+
+    gate_rows = (
+        (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id)))
+        .scalars()
+        .all()
+    )
+    gate_links = [(g.channel_title, g.invite_link) for g in gate_rows if g.invite_link]
+    with suppress(Exception):
+        await cb.bot.edit_message_text(
+            chat_id=c.channel_id,
+            message_id=c.message_id,
+            text=_build_channel_post_text(c, count),
+            reply_markup=roulette_controls_kb(
+                c.id, c.is_open, runtime.bot_username, gate_links, False
+            ),
+            parse_mode=ParseMode.HTML,
+        )
     await cb.answer("تم الانضمام ✅")
+
+
+@roulette_router.callback_query(RouletteFlow.await_antibot, F.data.startswith("antibot_ans:"))
+async def handle_antibot_ans(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    correct_ans = data.get("correct_ans")
+    contest_id = data.get("cid")
+    user_ans = int(cb.data.split(":")[1])
+
+    if user_ans == correct_ans:
+        async for session in get_async_session():
+            c = (
+                await session.execute(select(Contest).where(Contest.id == contest_id))
+            ).scalar_one_or_none()
+            if c:
+                await _complete_join(cb, c, session)
+                await cb.message.edit_text("✅ أحسنت! تم تأكيد انضمامك للسحب.")
+        await state.clear()
+    else:
+        await cb.answer("❌ إجابة خاطئة، حاول مرة أخرى", show_alert=True)
 
 
 @roulette_router.callback_query(F.data.startswith("pause:"))
@@ -918,7 +1042,7 @@ async def draw(cb: CallbackQuery) -> None:
                 await cb.answer("⏸️ يرجى إيقاف المشاركة أولاً.", show_alert=True)
                 return
 
-            participants = (
+            participants_uids = (
                 (
                     await session.execute(
                         select(ContestEntry.user_id).where(ContestEntry.contest_id == c.id)
@@ -927,8 +1051,27 @@ async def draw(cb: CallbackQuery) -> None:
                 .scalars()
                 .all()
             )
-            if not participants:
+            if not participants_uids:
                 await cb.answer("لا يوجد مشاركون", show_alert=True)
+                return
+
+            # Exclude Leavers logic
+            valid_participants = []
+            if c.exclude_leavers_enabled:
+                for uid in participants_uids:
+                    try:
+                        m = await cb.bot.get_chat_member(c.channel_id, uid)
+                        if getattr(m, "status", None) in {"member", "creator", "administrator"}:
+                            valid_participants.append(uid)
+                    except Exception:
+                        continue
+            else:
+                valid_participants = participants_uids
+
+            if not valid_participants:
+                await cb.answer(
+                    "⚠️ لا يوجد مشاركون مستوفون للشروط (ربما غادروا القناة).", show_alert=True
+                )
                 return
 
             # Countdown
@@ -944,7 +1087,7 @@ async def draw(cb: CallbackQuery) -> None:
                         text=f"سنعلن الفائزين خلال {remaining} ثانية!",
                     )
 
-            winners_ids = draw_unique(participants, c.winners_count)
+            winners_ids = draw_unique(valid_participants, c.winners_count)
             winners_lines = []
             for idx, uid in enumerate(winners_ids, start=1):
                 name = "الفائز"
