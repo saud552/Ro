@@ -67,9 +67,7 @@ class FeatureAccessRepository:
     async def grant_one_time(self, user_id: int, feature_key: str, *, credits: int = 1) -> None:
         fa = await self.get_user_feature_access(user_id, feature_key)
         if fa is None:
-            fa = FeatureAccess(
-                user_id=user_id, feature_key=feature_key, expires_at=None, one_time_credits=credits
-            )
+            fa = FeatureAccess(user_id=user_id, feature_key=feature_key, expires_at=None, one_time_credits=credits)
             self._session.add(fa)
         else:
             fa.one_time_credits += credits
