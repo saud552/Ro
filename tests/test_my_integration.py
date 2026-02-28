@@ -16,7 +16,7 @@ if _il.find_spec("greenlet") is None:  # pragma: no cover
 
 from app.db import get_async_session
 from app.db.engine import close_engine, init_engine
-from app.db.models import Roulette
+from app.db.models import Contest, ContestType
 from app.routers.my import _list_manageable_channels, _list_open_roulettes
 
 
@@ -53,12 +53,14 @@ async def test_manageable_channels_owner_and_admin(tmp_path) -> None:
     user_other = 200
     ch1 = 1111
     ch2 = 2222
-    # Seed: open roulette in ch1 by owner; open roulette in ch2 by other user
+    # Seed: open contest in ch1 by owner; open contest in ch2 by other user
     async for session in get_async_session():
         session.add(
-            Roulette(
+            Contest(
                 owner_id=user_owner,
                 channel_id=ch1,
+                unique_code="c1",
+                type=ContestType.ROULETTE,
                 text_raw="hello",
                 text_style="plain",
                 winners_count=1,
@@ -66,9 +68,11 @@ async def test_manageable_channels_owner_and_admin(tmp_path) -> None:
             )
         )
         session.add(
-            Roulette(
+            Contest(
                 owner_id=user_other,
                 channel_id=ch2,
+                unique_code="c2",
+                type=ContestType.ROULETTE,
                 text_raw="world",
                 text_style="plain",
                 winners_count=1,
@@ -90,27 +94,33 @@ async def test_open_roulettes_order_and_filter(tmp_path) -> None:
     await init_engine(os.environ["DATABASE_URL"])  # auto-creates schema for sqlite
     user_owner = 300
     ch1 = 3333
-    # Seed multiple roulettes (2 open, 1 closed)
+    # Seed multiple contests (2 open, 1 closed)
     async for session in get_async_session():
-        r1 = Roulette(
+        r1 = Contest(
             owner_id=user_owner,
             channel_id=ch1,
+            unique_code="r1",
+            type=ContestType.ROULETTE,
             text_raw="a" * 40,
             text_style="plain",
             winners_count=1,
             is_open=True,
         )
-        r2 = Roulette(
+        r2 = Contest(
             owner_id=user_owner,
             channel_id=ch1,
+            unique_code="r2",
+            type=ContestType.ROULETTE,
             text_raw="b" * 10,
             text_style="plain",
             winners_count=1,
             is_open=True,
         )
-        r3 = Roulette(
+        r3 = Contest(
             owner_id=user_owner,
             channel_id=ch1,
+            unique_code="r3",
+            type=ContestType.ROULETTE,
             text_raw="c" * 10,
             text_style="plain",
             winners_count=1,

@@ -41,8 +41,8 @@ class _DummyBot:
         )
 
     async def send_message(self, *args, **kwargs):
-        # Ignore in test (DM to winners)
-        return None
+        # Return a dummy message for countdown
+        return SimpleNamespace(message_id=42)
 
 
 class _DummyCB:
@@ -57,21 +57,23 @@ class _DummyCB:
 
 @pytest.mark.asyncio
 async def test_announce_html_parse_mode_and_content(monkeypatch):
-    # Prepare a roulette row and participants
+    # Prepare a contest row and entries
     from app.db import get_async_session
     from app.db.engine import close_engine, init_engine
-    from app.db.models import Participant, Roulette
+    from app.db.models import Contest, ContestEntry, ContestType
     from app.routers.roulette import draw as draw_handler
 
     os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_announce.sqlite3"
     await init_engine(os.environ["DATABASE_URL"])  # auto create for sqlite
 
-    # Seed a roulette and participants
+    # Seed a contest and entries
     rid = None
     async for session in get_async_session():
-        r = Roulette(
+        r = Contest(
             owner_id=1,
             channel_id=7777,
+            unique_code="draw_test",
+            type=ContestType.ROULETTE,
             text_raw="hello",
             text_style="plain",
             winners_count=1,
@@ -80,7 +82,7 @@ async def test_announce_html_parse_mode_and_content(monkeypatch):
         session.add(r)
         await session.flush()
         rid = r.id
-        session.add(Participant(roulette_id=rid, user_id=123456))
+        session.add(ContestEntry(contest_id=rid, user_id=123456))
         await session.commit()
 
     cb = _DummyCB()
@@ -97,11 +99,10 @@ async def test_announce_html_parse_mode_and_content(monkeypatch):
     # Execute handler
     cb.data = f"draw:{rid}"
 
-    # Inject a minimal prep message namespace into the function scope by monkeypatching send_message to return obj with message_id
-    async def _send_message(channel_id, text, reply_to_message_id=None):
-        return SimpleNamespace(message_id=42)
+    # To speed up test, skip sleep in countdown
+    import asyncio
 
-    cb.bot.send_message = _send_message
+    monkeypatch.setattr(asyncio, "sleep", lambda x: asyncio.sleep(0))
 
     await draw_handler(cb)
 

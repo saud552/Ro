@@ -5,22 +5,43 @@ from typing import Iterable, Tuple
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def back_kb() -> InlineKeyboardMarkup:
+def main_menu_kb() -> InlineKeyboardMarkup:
+    """Arabic Main Menu with all 8 requested sections."""
+    buttons = [
+        [InlineKeyboardButton(text="🎰 قسم الروليت", callback_data="section_roulette")],
+        [InlineKeyboardButton(text="🗳️ قسم مسابقات التصويت", callback_data="section_voting")],
+        [InlineKeyboardButton(text="🏆 مسابقة 'يستحق'", callback_data="section_yastahiq")],
+        [InlineKeyboardButton(text="❓ قسم مسابقة الأسئلة", callback_data="section_quiz")],
+        [
+            InlineKeyboardButton(
+                text="⚙️ إدارة المجموعات أو القنوات", callback_data="section_manage_chats"
+            )
+        ],
+        [InlineKeyboardButton(text="💎 قسم إدارة الاشتراك", callback_data="section_subscription")],
+        [
+            InlineKeyboardButton(
+                text="📊 إدارة سحوباتي ومسابقاتي", callback_data="section_my_contests"
+            )
+        ],
+        [InlineKeyboardButton(text="💰 قسم كسب النقاط", callback_data="section_points")],
+        [InlineKeyboardButton(text="👨‍💻 الدعم الفني", url="https://t.me/support")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def forced_sub_kb(channel_url: str) -> InlineKeyboardMarkup:
+    """Keyboard for forced subscription gate."""
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="رجوع", callback_data="back")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📢 اضغط للاشتراك", url=channel_url)],
+            [InlineKeyboardButton(text="✅ لقد اشتركت", callback_data="check_subscription")],
+        ]
     )
 
 
-def start_menu_kb() -> InlineKeyboardMarkup:
+def back_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="إنشاء الروليت", callback_data="create_roulette")],
-            [InlineKeyboardButton(text="ربط القناة", callback_data="link_channel")],
-            [InlineKeyboardButton(text="فصل القناة", callback_data="unlink_channel")],
-            [InlineKeyboardButton(text="سحوباتي", callback_data="my_draws")],
-            [InlineKeyboardButton(text="ذكّرني إذا فزت", callback_data="notify_me")],
-            [InlineKeyboardButton(text="الدعم الفني", url="https://t.me/support")],
-        ]
+        inline_keyboard=[[InlineKeyboardButton(text="رجوع", callback_data="back")]]
     )
 
 
