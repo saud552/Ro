@@ -3,7 +3,7 @@ from .engine import get_async_session as get_async_session
 from .engine import init_engine as init_engine
 from .models import Base as Base
 from .models import ChannelLink as ChannelLink
+from .models import Contest as Contest
+from .models import ContestEntry as ContestEntry
 from .models import Notification as Notification
-from .models import Participant as Participant
-from .models import Roulette as Roulette
 from .models import User as User
