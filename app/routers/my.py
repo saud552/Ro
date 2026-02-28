@@ -53,6 +53,7 @@ async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
 
 
 async def _list_open_roulettes(channel_id: int) -> List[Tuple[int, str]]:
+    """Legacy helper for tests."""
     async for session in get_async_session():
         rows = (
             await session.execute(
@@ -76,6 +77,30 @@ async def _list_open_roulettes(channel_id: int) -> List[Tuple[int, str]]:
     return []
 
 
+async def _list_open_contests(channel_id: int) -> List[Tuple[int, str]]:
+    async for session in get_async_session():
+        rows = (
+            await session.execute(
+                select(Contest.id, Contest.text_raw, Contest.type)
+                .where(
+                    (Contest.channel_id == channel_id)
+                    & (Contest.is_open.is_(True))
+                )
+                .order_by(Contest.id.desc())
+            )
+        ).all()
+        res: List[Tuple[int, str]] = []
+        for rid, text, ctype in rows:
+            preview = (text or "").strip()
+            type_label = "سحب" if ctype == ContestType.ROULETTE else "تصويت"
+            label = f"{type_label} #{rid} — {preview}"
+            if len(label) > 32:
+                label = label[:29] + "..."
+            res.append((rid, label))
+        return res
+    return []
+
+
 async def _can_manage(bot, user_id: int, c: Contest) -> bool:
     return (c.owner_id == user_id) or (await _is_admin_in_channel(bot, c.channel_id, user_id))
 
@@ -84,9 +109,9 @@ async def _can_manage(bot, user_id: int, c: Contest) -> bool:
 async def my_entry(message: Message) -> None:
     chs = await _list_manageable_channels(message.bot, message.from_user.id)
     if not chs:
-        await message.answer("لا توجد سحوبات فعّالة حالياً.")
+        await message.answer("لا توجد مسابقات فعّالة حالياً.")
         return
-    await message.answer("اختر قناة لإدارة سحوباتها:", reply_markup=my_channels_kb(chs))
+    await message.answer("اختر قناة لإدارة سحوباتها وتصويتاتها:", reply_markup=my_channels_kb(chs))
 
 
 @my_router.callback_query(F.data.startswith("mych:"))
@@ -108,7 +133,6 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
                     .where(
                         (Contest.channel_id == chat_id)
                         & (Contest.is_open.is_(True))
-                        & (Contest.type == ContestType.ROULETTE)
                     )
                     .order_by(Contest.id.desc())
                 )
@@ -118,7 +142,7 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
         )
         if not r:
             await cb.message.edit_text(
-                "لا توجد سحوبات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
+                "لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
             )
             await cb.answer()
             return
@@ -132,10 +156,10 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
+        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {'روليت' if r.type == ContestType.ROULETTE else 'تصويت'}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
         await cb.message.edit_text(
             text,
-            reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count),
+            reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
             parse_mode=ParseMode.HTML,
         )
         await cb.answer()
@@ -152,14 +176,14 @@ async def my_channel_list(cb: CallbackQuery) -> None:
     if chat_id not in {c for c, _ in chs}:
         await cb.answer("غير مصرح")
         return
-    rlist = await _list_open_roulettes(chat_id)
+    rlist = await _list_open_contests(chat_id)
     if not rlist:
         await cb.message.edit_text(
-            "لا توجد سحوبات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
+            "لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
         )
         await cb.answer()
         return
-    await cb.message.edit_text("اختر السحب لإدارته:", reply_markup=my_roulettes_kb(chat_id, rlist))
+    await cb.message.edit_text("اختر المسابقة لإدارتها:", reply_markup=my_roulettes_kb(chat_id, rlist))
     await cb.answer()
 
 
@@ -173,7 +197,7 @@ async def my_roulette(cb: CallbackQuery) -> None:
     async for session in get_async_session():
         r = (await session.execute(select(Contest).where(Contest.id == rid))).scalar_one_or_none()
         if not r:
-            await cb.answer("السحب غير موجود", show_alert=True)
+            await cb.answer("المسابقة غير موجودة", show_alert=True)
             return
         if not await _can_manage(cb.bot, cb.from_user.id, r):
             await cb.answer("غير مصرح", show_alert=True)
@@ -185,10 +209,10 @@ async def my_roulette(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
+        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {'روليت' if r.type == ContestType.ROULETTE else 'تصويت'}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
         await cb.message.edit_text(
             text,
-            reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count),
+            reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
             parse_mode=ParseMode.HTML,
         )
         await cb.answer()

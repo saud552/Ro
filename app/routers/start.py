@@ -75,3 +75,9 @@ async def check_subscription(cb: CallbackQuery) -> None:
 async def cancel_flow(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("✅ تم إلغاء العملية والعودة للبداية.", reply_markup=main_menu_kb())
+
+
+async def open_my_draws(message: Message):
+    """Legacy helper for tests."""
+    from .my import my_entry
+    await my_entry(message)

@@ -3,43 +3,96 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def voting_main_kb(contest_id: int, entries: list) -> InlineKeyboardMarkup:
+def vote_mode_kb() -> InlineKeyboardMarkup:
+    """Keyboard for selecting voting mode."""
+    buttons = [
+        [InlineKeyboardButton(text="❤️ تصويت عادي", callback_data="vmode_normal")],
+        [InlineKeyboardButton(text="⭐️ تصويت نجوم", callback_data="vmode_stars")],
+        [InlineKeyboardButton(text="⚖️ مزدوج (عادي + نجوم)", callback_data="vmode_both")],
+        [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def star_ratio_kb() -> InlineKeyboardMarkup:
+    """Keyboard for selecting star-to-vote ratio."""
+    buttons = [
+        [
+            InlineKeyboardButton(text="1 نجمة = 2 صوت", callback_data="vratio:2"),
+            InlineKeyboardButton(text="1 نجمة = 5 أصوات", callback_data="vratio:5"),
+        ],
+        [
+            InlineKeyboardButton(text="1 نجمة = 10 أصوات", callback_data="vratio:10"),
+            InlineKeyboardButton(text="1 نجمة = 50 صوت", callback_data="vratio:50"),
+        ],
+        [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def voting_main_kb(contest_id: int, entries: list, show_reg: bool = True) -> InlineKeyboardMarkup:
     """Main keyboard for a voting contest in the channel."""
     buttons = []
+    # If there are few entries, show them directly. If many, we might need a search or pagination.
+    # For now, show top entries or first few.
     for entry in entries:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f"❤️ {entry.entry_name} ({entry.votes_count})",
-                    callback_data=f"vote:{contest_id}:{entry.id}",
+                    text=f"👤 {entry.entry_name} ({entry.votes_count} ❤️)",
+                    callback_data=f"vote_sel:{contest_id}:{entry.id}",
                 )
             ]
         )
 
     buttons.append(
-        [InlineKeyboardButton(text="🏆 عرض المتصدرين", callback_data=f"leaderboard:{contest_id}")]
+        [InlineKeyboardButton(text="🏆 المتصدرين", callback_data=f"leaderboard:{contest_id}")]
     )
-    buttons.append(
-        [
-            InlineKeyboardButton(
-                text="📢 اشترك في المسابقة", callback_data=f"reg_contest:{contest_id}"
-            )
-        ]
-    )
+    if show_reg:
+        buttons.append(
+            [InlineKeyboardButton(text="📢 انضم كمتسابق", callback_data=f"reg_contest:{contest_id}")]
+        )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def voting_dual_kb(contest_id: int, entry_id: int, votes: int, stars: int) -> InlineKeyboardMarkup:
-    """Keyboard for a single contestant in dual mode (Normal + Stars)."""
-    buttons = [
-        [
+def voting_selection_kb(contest_id: int, entry_id: int, mode: str = "normal") -> InlineKeyboardMarkup:
+    """Keyboard shown when a user clicks on a contestant to vote for them."""
+    buttons = []
+    if mode in {"normal", "both"}:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="❤️ تصويت عادي", callback_data=f"vote_norm:{contest_id}:{entry_id}"
+                )
+            ]
+        )
+    if mode in {"stars", "both"}:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="⭐️ تصويت بالنجوم", callback_data=f"vote_star_pre:{contest_id}:{entry_id}"
+                )
+            ]
+        )
+    buttons.append([InlineKeyboardButton(text="🔙 رجوع", callback_data=f"vote_refresh:{contest_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def star_amounts_kb(contest_id: int, entry_id: int) -> InlineKeyboardMarkup:
+    """Keyboard for choosing how many stars to spend on a vote."""
+    amounts = [1, 5, 10, 50, 100, 500]
+    buttons = []
+    # Create rows of 3
+    for i in range(0, len(amounts), 3):
+        row = [
             InlineKeyboardButton(
-                text=f"❤️ تصويت عادي ({votes})", callback_data=f"vote_norm:{contest_id}:{entry_id}"
-            ),
-            InlineKeyboardButton(
-                text=f"⭐️ تصويت نجوم ({stars})", callback_data=f"vote_star:{contest_id}:{entry_id}"
-            ),
+                text=f"{amt} ⭐️", callback_data=f"vote_star_pay:{contest_id}:{entry_id}:{amt}"
+            )
+            for amt in amounts[i : i + 3]
         ]
-    ]
+        buttons.append(row)
+    buttons.append(
+        [InlineKeyboardButton(text="🔙 رجوع", callback_data=f"vote_sel:{contest_id}:{entry_id}")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)

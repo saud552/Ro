@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 
+from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Contest, ContestEntry, ContestType, Vote, VoteMode
@@ -17,6 +18,10 @@ class VotingService:
         self.entry_repo = ContestEntryRepository(session)
         self.vote_repo = VoteRepository(session)
 
+    async def get_contest(self, contest_id: int) -> Optional[Contest]:
+        """Fetch a contest by its ID."""
+        return await self.contest_repo.get_by_id(contest_id)
+
     async def register_contestant(
         self, contest_id: int, user_id: int, entry_name: str
     ) -> ContestEntry:
@@ -31,6 +36,35 @@ class VotingService:
         self.session.add(entry)
         await self.session.commit()
         return entry
+
+    async def get_entries_for_contest(self, contest_id: int) -> Sequence[ContestEntry]:
+        """Fetch all contestants for a specific contest."""
+        stmt = (
+            select(ContestEntry)
+            .where(ContestEntry.contest_id == contest_id)
+            .order_by(desc(ContestEntry.votes_count))
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_top_entries(self, contest_id: int, limit: int = 10) -> Sequence[ContestEntry]:
+        """Fetch top contestants for leaderboard."""
+        stmt = (
+            select(ContestEntry)
+            .where(ContestEntry.contest_id == contest_id)
+            .order_by(desc(ContestEntry.votes_count))
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_entry_by_code(self, contest_id: int, code: str) -> Optional[ContestEntry]:
+        """Fetch a contestant by their unique code within a contest."""
+        stmt = select(ContestEntry).where(
+            ContestEntry.contest_id == contest_id, ContestEntry.unique_code == code
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def add_vote(
         self,
@@ -77,8 +111,6 @@ class VotingService:
 
     async def get_total_stars(self, contest_id: int) -> int:
         """Calculate total stars received in a contest."""
-        from sqlalchemy import func, select
-
         stmt = select(func.sum(Vote.stars_amount)).where(
             Vote.contest_id == contest_id, Vote.is_stars.is_(True)
         )

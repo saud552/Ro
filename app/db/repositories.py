@@ -138,8 +138,12 @@ class FeatureAccessRepository(BaseRepository[FeatureAccess]):
             return False
 
         now = datetime.now(timezone.utc)
-        if fa.expires_at and fa.expires_at > now:
-            return True
+        expires_at = fa.expires_at
+        if expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at > now:
+                return True
 
         if fa.one_time_credits > 0:
             if consume_one_time:
@@ -159,7 +163,13 @@ class FeatureAccessRepository(BaseRepository[FeatureAccess]):
             )
             await self.add(fa)
         else:
-            base = fa.expires_at if fa.expires_at and fa.expires_at > now else now
+            base = fa.expires_at
+            if base:
+                if base.tzinfo is None:
+                    base = base.replace(tzinfo=timezone.utc)
+                base = max(base, now)
+            else:
+                base = now
             fa.expires_at = base + timedelta(days=days)
         await self.session.commit()
 

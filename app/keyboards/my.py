@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable, Tuple
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from ..db.models import ContestType
 
 
 def my_channels_kb(channels: Iterable[Tuple[int, str]]) -> InlineKeyboardMarkup:
@@ -24,7 +25,7 @@ def my_roulettes_kb(channel_id: int, contests: Iterable[Tuple[int, str]]) -> Inl
 
 
 def my_manage_kb(
-    contest_id: int, is_open: bool, channel_id: int, participants_count: int
+    contest_id: int, is_open: bool, channel_id: int, participants_count: int, ctype: ContestType = ContestType.ROULETTE
 ) -> InlineKeyboardMarkup:
     rows = []
     # Static info button (no action)
@@ -33,13 +34,20 @@ def my_manage_kb(
             InlineKeyboardButton(text=f"المشاركون: {participants_count}", callback_data="noop"),
         ]
     )
+
+    draw_callback = f"draw:{contest_id}"
+    draw_text = "بدء السحب"
+    if ctype == ContestType.VOTE:
+        draw_callback = f"draw_vote:{contest_id}"
+        draw_text = "إعلان الفائزين"
+
     rows.append(
         [
             InlineKeyboardButton(
                 text=("أوقف المشاركة" if is_open else "استئناف المشاركة"),
                 callback_data=(f"pause:{contest_id}" if is_open else f"resume:{contest_id}"),
             ),
-            InlineKeyboardButton(text="بدء السحب", callback_data=f"draw:{contest_id}"),
+            InlineKeyboardButton(text=draw_text, callback_data=draw_callback),
         ]
     )
     rows.append(
