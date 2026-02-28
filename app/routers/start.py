@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from ..config import settings
 from ..db import get_async_session
-from ..db.models import Notification, Roulette, User
+from ..db.models import Contest, Notification, User
 from ..keyboards.common import gate_kb, start_menu_kb
 from ..services.context import runtime
 from ..services.payments import grant_monthly, grant_one_time, has_gate_access
@@ -29,10 +29,8 @@ async def _ensure_user(user_id: int, username: str | None) -> None:
                 session.add(User(id=user_id, username=username))
                 await session.commit()
             except Exception:
-                # In case of a race (duplicate insert), roll back quietly
                 await session.rollback()
         else:
-            # Update username if changed
             if exists.username != username:
                 exists.username = username
                 await session.commit()
@@ -59,28 +57,27 @@ async def handle_start(message: Message, state: FSMContext) -> None:
     args = (message.text or "").split(maxsplit=1)
     if len(args) == 2 and args[1].startswith("notify-"):
         try:
-            rid = int(args[1].split("-", 1)[1])
+            cid = int(args[1].split("-", 1)[1])
         except ValueError:
-            rid = None
-        if rid:
+            cid = None
+        if cid:
             async for session in get_async_session():
                 exists = (
                     await session.execute(
                         select(Notification).where(
                             Notification.user_id == message.from_user.id,
-                            Notification.roulette_id == rid,
+                            Notification.contest_id == cid,
                         )
                     )
                 ).scalar_one_or_none()
-                roul = (
-                    await session.execute(select(Roulette).where(Roulette.id == rid))
+                cont = (
+                    await session.execute(select(Contest).where(Contest.id == cid))
                 ).scalar_one_or_none()
-                if roul and not exists:
-                    session.add(Notification(user_id=message.from_user.id, roulette_id=rid))
+                if cont and not exists:
+                    session.add(Notification(user_id=message.from_user.id, contest_id=cid))
                     await session.commit()
             await message.answer("تم تفعيل التنبيه لهذا السحب ✅")
             return
-    # Deep-link to open my draws from start parameter
     if len(args) == 2 and args[1].strip().lower() == "my":
         await my_draws_command(message)
         return
@@ -116,7 +113,6 @@ async def fallback(message: Message) -> None:
 
 @start_router.callback_query(F.data == "my_draws")
 async def open_my_draws(cb: CallbackQuery) -> None:
-    # Open management in private if possible; if pressed in private chat, run directly
     chat_type = getattr(cb.message.chat, "type", "")
     if str(chat_type) == "private":
         await my_draws_command(cb.message)
@@ -125,9 +121,6 @@ async def open_my_draws(cb: CallbackQuery) -> None:
         with suppress(Exception):
             await cb.bot.send_message(cb.from_user.id, f"لفتح سحوباتك اضغط: {link}")
     await cb.answer()
-
-
-# ===== Admin commands =====
 
 
 def _is_admin(user_id: int) -> bool:

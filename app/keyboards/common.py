@@ -85,7 +85,11 @@ def gate_add_menu_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="إضافة قناة كشرط", callback_data="gate_add_channel")],
             [InlineKeyboardButton(text="إضافة مجموعة كشرط", callback_data="gate_add_group")],
-            [InlineKeyboardButton(text="اختيار من قائمة القنوات/المجموعات", callback_data="gate_pick")],
+            [
+                InlineKeyboardButton(
+                    text="اختيار من قائمة القنوات/المجموعات", callback_data="gate_pick"
+                )
+            ],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
     )

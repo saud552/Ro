@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -65,7 +65,7 @@ async def _expire_feature_access_loop() -> None:
     # Periodically remove or mark expired monthly entitlements (no-op for one-time credits)
     while True:
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             from .db.models import FeatureAccess
 
             async for session in get_async_session():

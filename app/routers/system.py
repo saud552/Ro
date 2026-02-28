@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aiogram import Router
 from aiogram.enums import ChatMemberStatus
@@ -36,7 +36,7 @@ async def handle_my_chat_member(update: ChatMemberUpdated) -> None:
                     chat_id=chat_id,
                     chat_type=str(chat_type),
                     title=title,
-                    added_at=datetime.utcnow(),
+                    added_at=datetime.now(timezone.utc),
                     removed_at=None,
                 )
                 session.add(rec)
@@ -51,7 +51,7 @@ async def handle_my_chat_member(update: ChatMemberUpdated) -> None:
             ChatMemberStatus.RESTRICTED,
         }:
             if rec is not None:
-                rec.removed_at = datetime.utcnow()
+                rec.removed_at = datetime.now(timezone.utc)
                 await session.commit()
         else:
             # ignore other transitions

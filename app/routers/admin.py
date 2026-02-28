@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -128,7 +128,7 @@ async def admin_stats(cb: CallbackQuery) -> None:
                 .where(
                     (FeatureAccess.feature_key == "gate_channel")
                     & (FeatureAccess.expires_at.is_not(None))
-                    & (FeatureAccess.expires_at > datetime.utcnow())
+                    & (FeatureAccess.expires_at > datetime.now(timezone.utc))
                 )
             )
         ).scalar_one()

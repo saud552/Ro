@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import func, select
 
 from ..db import get_async_session
-from ..db.models import Participant, Roulette
+from ..db.models import Contest, ContestEntry, ContestType
 from ..keyboards.my import my_channels_kb, my_manage_kb, my_roulettes_kb
 from ..services.formatting import StyledText
 
@@ -25,13 +25,13 @@ async def _is_admin_in_channel(bot, chat_id: int, user_id: int) -> bool:
 
 
 async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
-    # Gather channels with open roulettes
+    # Gather channels with open contests
     channels: Set[int] = set()
     owner_channels: Set[int] = set()
     async for session in get_async_session():
         rows = (
             await session.execute(
-                select(Roulette.channel_id, Roulette.owner_id).where(Roulette.is_open.is_(True))
+                select(Contest.channel_id, Contest.owner_id).where(Contest.is_open.is_(True))
             )
         ).all()
         for ch_id, owner_id in rows:
@@ -56,9 +56,13 @@ async def _list_open_roulettes(channel_id: int) -> List[Tuple[int, str]]:
     async for session in get_async_session():
         rows = (
             await session.execute(
-                select(Roulette.id, Roulette.text_raw)
-                .where((Roulette.channel_id == channel_id) & (Roulette.is_open.is_(True)))
-                .order_by(Roulette.id.desc())
+                select(Contest.id, Contest.text_raw)
+                .where(
+                    (Contest.channel_id == channel_id)
+                    & (Contest.is_open.is_(True))
+                    & (Contest.type == ContestType.ROULETTE)
+                )
+                .order_by(Contest.id.desc())
             )
         ).all()
         res: List[Tuple[int, str]] = []
@@ -72,8 +76,8 @@ async def _list_open_roulettes(channel_id: int) -> List[Tuple[int, str]]:
     return []
 
 
-async def _can_manage(bot, user_id: int, r: Roulette) -> bool:
-    return (r.owner_id == user_id) or (await _is_admin_in_channel(bot, r.channel_id, user_id))
+async def _can_manage(bot, user_id: int, c: Contest) -> bool:
+    return (c.owner_id == user_id) or (await _is_admin_in_channel(bot, c.channel_id, user_id))
 
 
 @my_router.message(StateFilter(None), Command(commands=["my", "mydraws"]))
@@ -83,13 +87,6 @@ async def my_entry(message: Message) -> None:
         await message.answer("لا توجد سحوبات فعّالة حالياً.")
         return
     await message.answer("اختر قناة لإدارة سحوباتها:", reply_markup=my_channels_kb(chs))
-
-
-async def my_draws_command(message: Message) -> None:
-    await my_entry(message)
-
-
-## Removed duplicate handler for F.data == "my_draws" to avoid collision with start.open_my_draws
 
 
 @my_router.callback_query(F.data.startswith("mych:"))
@@ -103,14 +100,17 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
     if chat_id not in {c for c, _ in chs}:
         await cb.answer("غير مصرح")
         return
-    # Jump to latest open roulette in this channel
     async for session in get_async_session():
         r = (
             (
                 await session.execute(
-                    select(Roulette)
-                    .where((Roulette.channel_id == chat_id) & (Roulette.is_open.is_(True)))
-                    .order_by(Roulette.id.desc())
+                    select(Contest)
+                    .where(
+                        (Contest.channel_id == chat_id)
+                        & (Contest.is_open.is_(True))
+                        & (Contest.type == ContestType.ROULETTE)
+                    )
+                    .order_by(Contest.id.desc())
                 )
             )
             .scalars()
@@ -122,13 +122,14 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
             )
             await cb.answer()
             return
-        # Authorization check
         if not await _can_manage(cb.bot, cb.from_user.id, r):
             await cb.answer("غير مصرح", show_alert=True)
             return
         count = (
             await session.execute(
-                select(func.count()).select_from(Participant).where(Participant.roulette_id == r.id)
+                select(func.count())
+                .select_from(ContestEntry)
+                .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
         text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
@@ -170,7 +171,7 @@ async def my_roulette(cb: CallbackQuery) -> None:
         await cb.answer()
         return
     async for session in get_async_session():
-        r = (await session.execute(select(Roulette).where(Roulette.id == rid))).scalar_one_or_none()
+        r = (await session.execute(select(Contest).where(Contest.id == rid))).scalar_one_or_none()
         if not r:
             await cb.answer("السحب غير موجود", show_alert=True)
             return
@@ -179,7 +180,9 @@ async def my_roulette(cb: CallbackQuery) -> None:
             return
         count = (
             await session.execute(
-                select(func.count()).select_from(Participant).where(Participant.roulette_id == r.id)
+                select(func.count())
+                .select_from(ContestEntry)
+                .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
         text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
