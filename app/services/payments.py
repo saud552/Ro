@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
 from sqlalchemy import select
 
 from ..db import get_async_session
@@ -37,11 +35,17 @@ async def get_one_time_price_stars() -> int:
 
 # ملخص: يتحقق من صلاحية البوابة للمستخدم مع خيار استهلاك رصيد لمرة واحدة.
 async def has_gate_access(user_id: int, consume_one_time: bool = False) -> bool:
-    """Check if user has valid gate access."""
+    """Check if user has valid gate access.
+
+    If consume_one_time is True and only one_time_credits are available, decrement it.
+    """
+    result = False
     async for session in get_async_session():
         repo = FeatureAccessRepository(session)
-        return await repo.has_access(user_id, GATE_FEATURE_KEY, consume_one_time=consume_one_time)
-    return False
+        result = await repo.has_gate_access(
+            user_id, GATE_FEATURE_KEY, consume_one_time=consume_one_time
+        )
+    return result
 
 
 # ملخص: يمنح أو يمدد اشتراك المستخدم لمدة 30 يوماً.
@@ -56,17 +60,7 @@ async def grant_monthly(user_id: int) -> None:
 async def grant_one_time(user_id: int, credits: int = 1) -> None:
     async for session in get_async_session():
         repo = FeatureAccessRepository(session)
-        fa = await repo.get_user_access(user_id, GATE_FEATURE_KEY)
-        if not fa:
-            from ..db.models import FeatureAccess
-
-            fa = FeatureAccess(
-                user_id=user_id, feature_key=GATE_FEATURE_KEY, one_time_credits=credits
-            )
-            await repo.add(fa)
-        else:
-            fa.one_time_credits += credits
-        await repo.commit()
+        await repo.grant_one_time(user_id, GATE_FEATURE_KEY, credits=credits)
 
 
 # ملخص: يسجّل عملية شراء النجوم في قاعدة البيانات.
