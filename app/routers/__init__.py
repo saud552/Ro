@@ -9,6 +9,8 @@ from .sections import sections_router
 from .start import start_router
 from .system import system_router
 from .voting import voting_router
+from .yastahiq import yastahiq_router
+from .quiz import quiz_router
 
 
 # ملخص: تسجيل جميع الراوترات ضمن الـ Dispatcher.
@@ -16,6 +18,8 @@ def setup_routers(dp: Dispatcher) -> None:
     dp.include_router(start_router)
     dp.include_router(roulette_router)
     dp.include_router(voting_router)
+    dp.include_router(yastahiq_router)
+    dp.include_router(quiz_router)
     dp.include_router(sections_router)
     dp.include_router(admin_router)
     dp.include_router(system_router)

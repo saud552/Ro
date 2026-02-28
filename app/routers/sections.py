@@ -1,39 +1,149 @@
 from __future__ import annotations
 
 from aiogram import F, Router
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import select
 
-from .roulette import CreateRoulette, start_create_flow
-from ..db.models import ContestType
+from ..db import get_async_session
+from ..db.models import User, FeatureAccess
+from ..keyboards.common import back_kb, main_menu_kb
+from datetime import datetime, timezone
 
 sections_router = Router(name="sections")
 
 
-@sections_router.callback_query(F.data.startswith("section_"))
-async def handle_sections(cb: CallbackQuery, state: FSMContext) -> None:
-    section = cb.data.replace("section_", "")
+@sections_router.callback_query(F.data == "section_roulette")
+async def section_roulette(cb: CallbackQuery) -> None:
+    text = (
+        "🎯 <b>قسم السحب العشوائي (الروليت)</b>\n\n"
+        "هذا القسم يتيح لك إنشاء سحوبات احترافية في قناتك مع ميزات:\n"
+        "• منع الحسابات الوهمية.\n"
+        "• اشتراك إجباري في عدة قنوات.\n"
+        "• استبعاد المغادرين تلقائياً.\n"
+        "• تحديد عدد الفائزين."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ إنشاء سحب جديد", callback_data="create_roulette")],
+            [InlineKeyboardButton(text="📦 سحوباتي", callback_data="my_draws")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.answer()
 
-    if section == "roulette":
-        await start_create_flow(cb, state, ContestType.ROULETTE)
-    elif section == "voting":
-        await start_create_flow(cb, state, ContestType.VOTE)
-    elif section == "yastahiq":
-        await start_create_flow(cb, state, ContestType.YASTAHIQ)
-    elif section == "quiz":
-        await cb.message.answer("❓ قسم مسابقة الأسئلة: ستتم إضافة هذه الميزة في المرحلة الخامسة.")
-    elif section == "manage_chats":
-        await cb.message.answer(
-            "⚙️ إدارة المجموعات أو القنوات: يمكنك ربط قنواتك من خلال تحويل رسالة منها للبوت."
+
+@sections_router.callback_query(F.data == "section_vote")
+async def section_vote(cb: CallbackQuery) -> None:
+    text = (
+        "🗳 <b>قسم مسابقات التصويت</b>\n\n"
+        "أنشئ مسابقات تصويت عادلة مع دعم:\n"
+        "• التصويت العادي.\n"
+        "• التصويت عبر نجوم تلغرام.\n"
+        "• منع تكرار التصويت.\n"
+        "• لوحة متصدرين حية."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ إنشاء مسابقة تصويت", callback_data="create_vote")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.answer()
+
+
+@sections_router.callback_query(F.data == "section_yastahiq")
+async def section_yastahiq(cb: CallbackQuery) -> None:
+    text = (
+        "🔥 <b>قسم مسابقات يستحق</b>\n\n"
+        "حوّل التفاعل في مجموعتك إلى مسابقة!\n"
+        "البوت يراقب الكلمات مثل 'يستحق' أو 'كفو' ويضيف نقاطاً للمرسل إليه تلقائياً."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ تفعيل في مجموعة", callback_data="create_yastahiq")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.answer()
+
+
+@sections_router.callback_query(F.data == "section_quiz")
+async def section_quiz(cb: CallbackQuery) -> None:
+    text = (
+        "🧠 <b>قسم المسابقات الثقافية (Quiz)</b>\n\n"
+        "قم بإدارة مسابقات أسئلة وأجوبة تلقائية:\n"
+        "• بنك أسئلة متنوع.\n"
+        "• فواصل زمنية بين الأسئلة.\n"
+        "• تصحيح تلقائي وحساب للنقاط."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ إنشاء كويز", callback_data="create_quiz")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.answer()
+
+
+@sections_router.callback_query(F.data == "section_referral")
+async def section_referral(cb: CallbackQuery) -> None:
+    me = await cb.bot.get_me()
+    bot_username = me.username
+    ref_link = f"https://t.me/{bot_username}?start={cb.from_user.id}"
+
+    async for session in get_async_session():
+        stmt = select(User).where(User.id == cb.from_user.id)
+        user = (await session.execute(stmt)).scalar_one()
+        points = user.points
+
+    text = (
+        "💰 <b>نظام الإحالة والارباح</b>\n\n"
+        "شارك رابطك الخاص واربح نقاطاً مقابل كل شخص ينضم عبرك!\n\n"
+        f"🔗 رابطك: <code>{ref_link}</code>\n"
+        f"💎 رصيدك الحالي: <b>{points}</b> نقطة"
+    )
+    await cb.message.edit_text(text, reply_markup=back_kb())
+    await cb.answer()
+
+
+@sections_router.callback_query(F.data == "section_account")
+async def section_account(cb: CallbackQuery) -> None:
+    async for session in get_async_session():
+        stmt = select(FeatureAccess).where(
+            (FeatureAccess.user_id == cb.from_user.id) & (FeatureAccess.feature_key == "gate_channel")
         )
-    elif section == "subscription":
-        await cb.message.answer("💎 قسم إدارة الاشتراك: يمكنك ترقية حسابك للحصول على ميزات إضافية.")
-    elif section == "my_contests":
-        from .my import my_entry
-        await my_entry(cb.message)
-    elif section == "points":
-        await cb.message.answer("💰 قسم كسب النقاط: شارك رابط الإحالة الخاص بك لكسب النقاط.")
-    else:
-        await cb.message.answer("قريباً...")
+        access = (await session.execute(stmt)).scalar_one_or_none()
 
+        status = "❌ غير مشترك"
+        if access:
+            now = datetime.now(timezone.utc)
+            expires = access.expires_at
+            if expires and expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+
+            if expires and expires > now:
+                status = f"✅ مشترك (ينتهي: {expires.strftime('%Y-%m-%d')})"
+            elif access.one_time_credits > 0:
+                status = f"✅ رصيد متاح ({access.one_time_credits} مسابقة)"
+
+    text = (
+        "👤 <b>حسابي واشتراكاتي</b>\n\n"
+        f"الاسم: <b>{cb.from_user.full_name}</b>\n"
+        f"المعرف: <code>{cb.from_user.id}</code>\n\n"
+        f"حالة ميزة قنوات الشرط: {status}"
+    )
+    await cb.message.edit_text(text, reply_markup=back_kb())
+    await cb.answer()
+
+
+@sections_router.callback_query(F.data == "main_menu")
+async def back_to_main(cb: CallbackQuery) -> None:
+    await cb.message.edit_text(
+        "يرجى اختيار القسم المطلوب من القائمة أدناه:",
+        reply_markup=main_menu_kb(),
+    )
     await cb.answer()

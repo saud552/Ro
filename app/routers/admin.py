@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from aiogram import F, Router
@@ -7,14 +8,12 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 from sqlalchemy import func, select
 
 from ..config import settings
 from ..db import get_async_session
 from ..db.models import AppSetting, BotChat, ChannelLink, FeatureAccess, Purchase, User
-
-# NOTE: Constants are named DEFAULT_MONTHLY_STARS and DEFAULT_ONE_TIME_STARS in services.payments
-# Importing them here is unnecessary; dynamic prices are fetched via helpers.
 
 admin_router = Router(name="admin")
 
@@ -22,6 +21,7 @@ admin_router = Router(name="admin")
 class AdminStates(StatesGroup):
     await_price_value = State()
     await_bot_channel = State()
+    await_broadcast_message = State()
 
 
 def _is_admin(user_id: int) -> bool:
@@ -34,12 +34,12 @@ def _is_admin(user_id: int) -> bool:
 def admin_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="الاحصائيات", callback_data="admin_stats")],
-            [InlineKeyboardButton(text="الاذاعة (قريباً)", callback_data="admin_broadcast")],
-            [InlineKeyboardButton(text="تعيين قيمة الاشتراك", callback_data="admin_set_prices")],
+            [InlineKeyboardButton(text="📊 الاحصائيات", callback_data="admin_stats")],
+            [InlineKeyboardButton(text="📢 الاذاعة", callback_data="admin_broadcast")],
+            [InlineKeyboardButton(text="💰 تعيين قيمة الاشتراك", callback_data="admin_set_prices")],
             [
                 InlineKeyboardButton(
-                    text="تعيين قناة البوت الأساسية", callback_data="admin_set_bot_channel"
+                    text="🔗 تعيين قناة البوت الأساسية", callback_data="admin_set_bot_channel"
                 )
             ],
         ]
@@ -64,7 +64,7 @@ async def admin_entry(message: Message, state: FSMContext) -> None:
     if not _is_admin(message.from_user.id):
         return
     await state.clear()
-    await message.answer("لوحة التحكم:", reply_markup=admin_menu_kb())
+    await message.answer("🛠 لوحة التحكم الخاصة بالمشرفين:", reply_markup=admin_menu_kb())
 
 
 # ---- Back ----
@@ -75,22 +75,8 @@ async def admin_back(cb: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(cb.from_user.id):
         await cb.answer()
         return
-    # Clear FSM and pending keys to prevent leaking states
     await state.clear()
-    async for session in get_async_session():
-        await session.execute(select(AppSetting))  # noop touch
-        # Delete ephemeral pending key if exists
-        pending_key = f"pending:{cb.from_user.id}"
-        rec = (
-            await session.execute(select(AppSetting).where(AppSetting.key == pending_key))
-        ).scalar_one_or_none()
-        if rec:
-            # SQLAlchemy doesn't have simple delete by instance in async version without session.delete
-            from sqlalchemy import delete as sqldelete
-
-            await session.execute(sqldelete(AppSetting).where(AppSetting.key == pending_key))
-            await session.commit()
-    await cb.message.answer("لوحة التحكم:", reply_markup=admin_menu_kb())
+    await cb.message.edit_text("🛠 لوحة التحكم الخاصة بالمشرفين:", reply_markup=admin_menu_kb())
     await cb.answer()
 
 
@@ -136,27 +122,57 @@ async def admin_stats(cb: CallbackQuery) -> None:
             await session.execute(select(func.coalesce(func.sum(Purchase.stars_amount), 0)))
         ).scalar_one()
     text = (
-        f"عدد المستخدمين: {total_users}\n"
-        f"عدد القنوات المفعّلة: {total_channels}\n"
-        f"عدد المجموعات المفعّلة: {total_groups}\n"
-        f"عدد من دفعوا: {paid_users}\n"
-        f"الاشتراكات النشطة: {active_paid}\n"
-        f"إجمالي النجوم المدفوعة: {stars_total}"
+        f"📊 <b>إحصائيات النظام:</b>\n\n"
+        f"👤 عدد المستخدمين: <b>{total_users}</b>\n"
+        f"📢 عدد القنوات المفعّلة: <b>{total_channels}</b>\n"
+        f"👥 عدد المجموعات المفعّلة: <b>{total_groups}</b>\n"
+        f"💳 عدد عمليات الشراء: <b>{paid_users}</b>\n"
+        f"💎 الاشتراكات النشطة: <b>{active_paid}</b>\n"
+        f"⭐️ إجمالي النجوم المحصلة: <b>{stars_total}</b>"
     )
-    await cb.message.answer(text)
+    await cb.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="رجوع", callback_data="admin_back")]]))
     await cb.answer()
 
 
-# ---- Broadcast placeholder ----
+# ---- Broadcast ----
 
 
 @admin_router.callback_query(F.data == "admin_broadcast")
-async def admin_broadcast(cb: CallbackQuery) -> None:
+async def admin_broadcast_start(cb: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(cb.from_user.id):
         await cb.answer()
         return
-    await cb.message.answer("الميزة قادمة قريباً")
+    await state.set_state(AdminStates.await_broadcast_message)
+    await cb.message.answer("أرسل الرسالة التي تريد إذاعتها لجميع المستخدمين (نص، صورة، إلخ):")
     await cb.answer()
+
+
+@admin_router.message(AdminStates.await_broadcast_message)
+async def admin_broadcast_execute(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+
+    async for session in get_async_session():
+        user_ids = (await session.execute(select(User.id))).scalars().all()
+
+    await message.answer(f"🚀 بدأت عملية الإذاعة لـ {len(user_ids)} مستخدم...")
+
+    success = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            await message.copy_to(chat_id=uid)
+            success += 1
+            await asyncio.sleep(0.05) # Rate limiting
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+            await message.copy_to(chat_id=uid)
+            success += 1
+        except (TelegramForbiddenError, Exception):
+            failed += 1
+
+    await message.answer(f"✅ اكتملت الإذاعة!\n\nنجاح: {success}\nفشل/حظر: {failed}", reply_markup=admin_menu_kb())
+    await state.clear()
 
 
 # ---- Prices ----
@@ -168,13 +184,15 @@ async def admin_set_prices(cb: CallbackQuery, state: FSMContext) -> None:
         await cb.answer()
         return
     await state.clear()
-    # Fetch dynamic prices
     from ..services.payments import get_monthly_price_stars, get_one_time_price_stars
 
     once = await get_one_time_price_stars()
     month = await get_monthly_price_stars()
     await cb.message.answer(
-        f"القيم الحالية:\nمرة واحدة: {once} نجمة\nشهري: {month} نجمة\nاختر ما تريد تعديله:",
+        f"💰 <b>إعدادات الأسعار:</b>\n\n"
+        f"المرة الواحدة: <b>{once}</b> نجمة\n"
+        f"الاشتراك الشهري: <b>{month}</b> نجمة\n\n"
+        f"اختر ما تريد تعديله:",
         reply_markup=prices_kb(),
     )
     await cb.answer()
@@ -188,7 +206,7 @@ async def admin_price_choose(cb: CallbackQuery, state: FSMContext) -> None:
     key = "price_once" if cb.data == "price_once" else "price_month"
     await state.set_state(AdminStates.await_price_value)
     await state.update_data(price_mode=key)
-    await cb.message.answer("أرسل الآن عدد النجوم المطلوب")
+    await cb.message.answer("⌨️ أرسل الآن القيمة الجديدة (عدد النجوم):")
     await cb.answer()
 
 
@@ -210,13 +228,7 @@ async def admin_price_set_value(message: Message, state: FSMContext) -> None:
             session.add(AppSetting(key=actual_key, value=str(value)))
         await session.commit()
     await state.clear()
-    # Acknowledge free-tier if price is 0
-    if value == 0:
-        await message.answer(
-            "تم ضبط السعر على 0 — سيتم اعتبار هذه الفئة مجانية.", reply_markup=admin_menu_kb()
-        )
-    else:
-        await message.answer("تم ضبط القيم الجديدة بنجاح", reply_markup=admin_menu_kb())
+    await message.answer(f"✅ تم تحديث السعر إلى {value} نجمة.", reply_markup=admin_menu_kb())
 
 
 # ---- Set bot base channel ----
@@ -228,7 +240,7 @@ async def admin_set_bot_channel(cb: CallbackQuery, state: FSMContext) -> None:
         await cb.answer()
         return
     await state.set_state(AdminStates.await_bot_channel)
-    await cb.message.answer("أرسل رابط أو يوزر القناة الأساسية الجديدة (@username أو t.me/...) ")
+    await cb.message.answer("🔗 أرسل رابط أو يوزر القناة الأساسية الجديدة (@username):")
     await cb.answer()
 
 
@@ -241,15 +253,13 @@ async def admin_apply_bot_channel(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     username = text.split("/")[-1].lstrip("@")
     value = f"@{username}"
-    # Validate via get_chat
     try:
         c = await message.bot.get_chat(value)
-        ctype = getattr(c, "type", "")
-        if str(ctype) != "channel":
-            await message.answer("هذا المعرف ليس قناة عامة صالحة")
+        if str(getattr(c, "type", "")) != "channel":
+            await message.answer("❌ هذا المعرف ليس قناة عامة صالحة.")
             return
     except Exception:
-        await message.answer("تعذر التحقق من القناة. تأكد من صحة اليوزر وعلنيتها")
+        await message.answer("❌ تعذر التحقق من القناة. تأكد من صحة المعرف.")
         return
     async for session in get_async_session():
         row = (
@@ -261,4 +271,4 @@ async def admin_apply_bot_channel(message: Message, state: FSMContext) -> None:
             session.add(AppSetting(key="bot_base_channel", value=value))
         await session.commit()
     await state.clear()
-    await message.answer(f"تم تعيين قناة البوت إلى: {value}", reply_markup=admin_menu_kb())
+    await message.answer(f"✅ تم تعيين قناة البوت الأساسية إلى: {value}", reply_markup=admin_menu_kb())
