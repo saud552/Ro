@@ -102,9 +102,7 @@ async def _get_user_channel_id(user_id: int) -> Optional[int]:
 def _build_channel_post_text(c: Contest, participants_count: int) -> str:
     """Compose channel post text with styling, status line, and participants count."""
     styled = StyledText(c.text_raw, c.text_style).render()
-    status_line = (
-        "المشاركة في السحب متاحة حالياً" if c.is_open else "المشاركة في السحب متوقفة حالياً"
-    )
+    status_line = "المشاركة في السحب متاحة حالياً" if c.is_open else "المشاركة في السحب متوقفة حالياً"
     return f"{styled}\n\n{status_line}\nعدد المشاركين: {participants_count}"
 
 
