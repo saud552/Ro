@@ -62,6 +62,12 @@ class QuizService:
         await self.session.commit()
         return count
 
+    async def get_contest_questions(self, contest_id: int) -> List[Question]:
+        """Fetch all questions for a specific quiz contest."""
+        stmt = select(Question).where(Question.contest_id == contest_id)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_next_question(self, contest_id: int, exclude_ids: List[int]) -> Optional[Question]:
         """Fetch a question for the contest that hasn't been used yet in this session."""
         stmt = select(Question).where(
@@ -98,6 +104,7 @@ class QuizService:
             return None
 
         correct_variants = json.loads(q.correct_answers_json)
+        # Normalize and compare
         is_correct = any(answer.strip().lower() == v.strip().lower() for v in correct_variants)
 
         if is_correct:

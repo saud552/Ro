@@ -3,11 +3,11 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
+from datetime import datetime, timezone
 
 from ..db import get_async_session
 from ..db.models import User, FeatureAccess
 from ..keyboards.common import back_kb, main_menu_kb
-from datetime import datetime, timezone
 
 sections_router = Router(name="sections")
 
@@ -29,7 +29,7 @@ async def section_roulette(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -46,10 +46,11 @@ async def section_vote(cb: CallbackQuery) -> None:
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="➕ إنشاء مسابقة تصويت", callback_data="create_vote")],
+            [InlineKeyboardButton(text="📦 مسابقاتي", callback_data="my_draws")],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -66,7 +67,7 @@ async def section_yastahiq(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -85,7 +86,7 @@ async def section_quiz(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -106,7 +107,7 @@ async def section_referral(cb: CallbackQuery) -> None:
         f"🔗 رابطك: <code>{ref_link}</code>\n"
         f"💎 رصيدك الحالي: <b>{points}</b> نقطة"
     )
-    await cb.message.edit_text(text, reply_markup=back_kb())
+    await cb.message.edit_text(text, reply_markup=back_kb(), parse_mode="HTML")
     await cb.answer()
 
 
@@ -136,21 +137,12 @@ async def section_account(cb: CallbackQuery) -> None:
         f"المعرف: <code>{cb.from_user.id}</code>\n\n"
         f"حالة ميزة قنوات الشرط: {status}"
     )
-    await cb.message.edit_text(text, reply_markup=back_kb())
+    await cb.message.edit_text(text, reply_markup=back_kb(), parse_mode="HTML")
     await cb.answer()
 
-
-@sections_router.callback_query(F.data == "main_menu")
-async def back_to_main(cb: CallbackQuery) -> None:
-    await cb.message.edit_text(
-        "يرجى اختيار القسم المطلوب من القائمة أدناه:",
-        reply_markup=main_menu_kb(),
-    )
-    await cb.answer()
 
 @sections_router.callback_query(F.data == "section_store")
 async def section_store(cb: CallbackQuery) -> None:
-    # Costs in points
     price_once = 50
     price_month = 200
 
@@ -174,7 +166,16 @@ async def section_store(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb)
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await cb.answer()
+
+
+@sections_router.callback_query(F.data == "main_menu")
+async def back_to_main(cb: CallbackQuery) -> None:
+    await cb.message.edit_text(
+        "يرجى اختيار القسم المطلوب من القائمة أدناه:",
+        reply_markup=main_menu_kb(),
+    )
     await cb.answer()
 
 @sections_router.callback_query(F.data.startswith("buy_points_"))

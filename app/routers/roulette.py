@@ -57,6 +57,8 @@ from ..services.formatting import StyledText, parse_style_from_text
 from ..services.payments import grant_monthly, grant_one_time, has_gate_access, log_purchase
 from ..services.ratelimit import get_rate_limiter
 from ..services.security import draw_unique
+from ..services.subscription import SubscriptionService
+from ..db.repositories import AppSettingRepository
 
 # ملخص: أقفال داخلية بسيطة لمنع تنفيذ متزامن لنفس العملية (داخل العملية فقط).
 _inproc_locks: dict[str, bool] = {}
@@ -73,6 +75,7 @@ class CreateRoulette(StatesGroup):
     await_star_ratio = State()
     await_settings = State()
     await_confirm = State()
+    await_gate_target = State()
 
 
 class RouletteFlow(StatesGroup):
@@ -473,7 +476,7 @@ async def collect_text(message: Message, state: FSMContext) -> None:
     text, style = parse_style_from_text(message.text or "")
     await state.update_data(text_raw=text, style=style)
     await state.set_state(CreateRoulette.await_gate_choice)
-    await message.answer("هل تريد إضافة قناة شرط؟", reply_markup=gate_choice_kb())
+    await message.answer("هل تريد إضافة شرط؟", reply_markup=gate_choice_kb())
 
 
 @roulette_router.callback_query(F.data == "gate_skip")
@@ -497,7 +500,7 @@ async def gate_add(cb: CallbackQuery, state: FSMContext) -> None:
 
         m_price = await get_monthly_price_stars()
         o_price = await get_one_time_price_stars()
-        text = "🔰 ميزة إضافة قناة الشرط متاحة فقط للمشتركين."
+        text = "🔰 ميزة إضافة الشروط المتقدمة متاحة فقط للمشتركين."
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=f"اشتراك شهري ({m_price})", callback_data="pay_monthly")],
@@ -509,7 +512,7 @@ async def gate_add(cb: CallbackQuery, state: FSMContext) -> None:
         await cb.answer()
         return
     await state.update_data(sub_view="gate_add_menu")
-    await cb.message.answer("اختر طريقة إضافة الشرط:", reply_markup=gate_add_menu_kb())
+    await cb.message.answer("اختر نوع الشرط:", reply_markup=gate_add_menu_kb())
     await cb.answer()
 
 
@@ -569,6 +572,7 @@ async def add_gate_forwarded(message: Message, state: FSMContext) -> None:
     gates = list(data.get("gate_channels", []))
     gates.append(
         {
+            "gate_type": "channel" if str(getattr(chat, "type", "")) == "channel" else "group",
             "channel_id": channel.id,
             "channel_title": getattr(channel, "title", "Channel"),
             "invite_link": invite_link,
@@ -610,6 +614,7 @@ async def add_gate_link(message: Message, state: FSMContext) -> None:
     gates = list(data.get("gate_channels", []))
     gates.append(
         {
+            "gate_type": "channel" if ctype == "channel" else "group",
             "channel_id": c.id,
             "channel_title": getattr(c, "title", "Channel"),
             "invite_link": invite_link,
@@ -660,7 +665,7 @@ async def gate_pick_apply(cb: CallbackQuery, state: FSMContext) -> None:
         title = rec.title if rec else f"Chat {chat_id}"
     data = await state.get_data()
     gates = list(data.get("gate_channels", []))
-    gates.append({"channel_id": chat_id, "channel_title": title, "invite_link": invite_link})
+    gates.append({"channel_id": chat_id, "channel_title": title, "invite_link": invite_link, "gate_type": "channel"})
     await state.update_data(gate_channels=gates)
     await cb.message.answer("تمت إضافة الشرط ✅", reply_markup=gates_manage_kb(len(gates)))
     await cb.answer()
@@ -795,14 +800,17 @@ async def confirm_create_cb(cb: CallbackQuery, state: FSMContext) -> None:
             session.add(
                 RouletteGate(
                     contest_id=contest.id,
+                    gate_type=g.get("gate_type", "channel"),
                     channel_id=g.get("channel_id"),
                     channel_title=g.get("channel_title") or "Gate",
                     invite_link=g.get("invite_link"),
+                    target_id=g.get("target_id"),
+                    target_code=g.get("target_code")
                 )
             )
 
         gate_links = [
-            (g.get("channel_title") or "Gate", g.get("invite_link")) for g in gate_channels
+            (g.get("channel_title") or "Gate", g.get("invite_link")) for g in gate_channels if g.get("invite_link")
         ]
         post_text = _build_channel_post_text(contest, 0)
 
@@ -828,7 +836,7 @@ async def confirm_create_cb(cb: CallbackQuery, state: FSMContext) -> None:
             await has_gate_access(cb.from_user.id, consume_one_time=True)
 
     await cb.bot.send_message(
-        cb.from_user.id, "تم إنشاء المسابقة بنجاح.", reply_markup=manage_draw_kb(contest.id)
+        cb.from_user.id, f"تم إنشاء المسابقة بنجاح. رمزها الفريد: <code>{unique_code}</code>", reply_markup=manage_draw_kb(contest.id)
     )
     await state.clear()
     await cb.answer()
@@ -870,16 +878,11 @@ async def join(cb: CallbackQuery, state: FSMContext) -> None:
             .scalars()
             .all()
         )
+        sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
         for gate in gate_rows:
-            if gate.channel_id:
-                try:
-                    m2 = await cb.bot.get_chat_member(gate.channel_id, cb.from_user.id)
-                    if getattr(m2, "status", None) not in {"member", "creator", "administrator"}:
-                        await cb.answer(f"يرجى الاشتراك في {gate.channel_title}", show_alert=True)
-                        return
-                except Exception:
-                    await cb.answer(f"يرجى الاشتراك في {gate.channel_title}", show_alert=True)
-                    return
+            if not await sub_service.check_gate(cb.from_user.id, gate, session):
+                await cb.answer(f"⚠️ يجب تنفيذ الشرط: {gate.channel_title}", show_alert=True)
+                return
 
         # 4. Anti-bot logic
         if c.anti_bot_enabled:
@@ -939,7 +942,7 @@ async def _complete_join(cb: CallbackQuery, c: Contest, session):
             ),
             parse_mode=ParseMode.HTML,
         )
-    await cb.answer("تم الانضمام ✅")
+    await cb.answer("تم الانضمام بنجاح ✅")
 
 
 @roulette_router.callback_query(RouletteFlow.await_antibot, F.data.startswith("antibot_ans:"))
@@ -1150,3 +1153,86 @@ async def on_successful_payment(message: Message):
     """Legacy helper for tests."""
     from .voting import handle_successful_payment
     await handle_successful_payment(message)
+
+@roulette_router.callback_query(F.data.in_({"gate_add_vote", "gate_add_yastahiq", "gate_add_contest"}))
+async def gate_add_special(cb: CallbackQuery, state: FSMContext) -> None:
+    gtype = cb.data.replace("gate_add_", "")
+    await state.update_data(sub_view=f"gate_add_{gtype}")
+
+    prompt = {
+        "vote": "أرسل رمز التصويت الخاص بالمتسابق:",
+        "yastahiq": "أرسل رمز المنشور الخاص بمتسابق 'يستحق':",
+        "contest": "أرسل رمز الروليت الآخر المطلوب الاشتراك به:"
+    }.get(gtype)
+
+    await state.set_state(CreateRoulette.await_gate_target)
+    await cb.message.answer(prompt, reply_markup=back_kb())
+    await cb.answer()
+
+@roulette_router.message(CreateRoulette.await_gate_target)
+async def collect_gate_target(message: Message, state: FSMContext) -> None:
+    code = (message.text or "").strip()
+    data = await state.get_data()
+    gtype = data.get("sub_view").replace("gate_add_", "")
+
+    async for session in get_async_session():
+        # Validate code based on type
+        target_id = None
+        title = ""
+
+        if gtype == "vote":
+            from ..db.models import ContestEntry
+            entry = (await session.execute(select(ContestEntry).where(ContestEntry.unique_code == code))).scalar_one_or_none()
+            if entry:
+                target_id = entry.contest_id
+                title = f"تصويت لـ {entry.entry_name}"
+        elif gtype == "contest":
+            from ..db.models import Contest
+            c = (await session.execute(select(Contest).where(Contest.unique_code == code))).scalar_one_or_none()
+            if c:
+                target_id = c.id
+                title = f"سحب #{c.id}"
+        elif gtype == "yastahiq":
+            from ..db.models import ContestEntry
+            entry = (await session.execute(select(ContestEntry).where(ContestEntry.unique_code == code))).scalar_one_or_none()
+            if entry:
+                target_id = entry.id
+                title = f"تعليق لـ {entry.entry_name}"
+
+        if target_id is None:
+            await message.answer("⚠️ الرمز غير صالح، يرجى التأكد منه وإعادة الإرسال.")
+            return
+
+        gates = list(data.get("gate_channels", []))
+        gates.append({
+            "gate_type": gtype,
+            "target_id": target_id,
+            "target_code": code,
+            "channel_title": title
+        })
+        await state.update_data(gate_channels=gates)
+        await state.set_state(CreateRoulette.await_gate_choice)
+        await message.answer("تمت إضافة الشرط ✅", reply_markup=gates_manage_kb(len(gates)))
+
+@roulette_router.callback_query(F.data.startswith("share_contest:"))
+async def share_contest_handler(cb: CallbackQuery) -> None:
+    contest_id = int(cb.data.split(":")[1])
+    async for session in get_async_session():
+        c = await session.get(Contest, contest_id)
+        if c:
+            share_text = f"🎰 انضم للسحب العشوائي الجديد في قناتنا!\n\nرابط المسابقة: https://t.me/c/{str(c.channel_id).replace('-100', '')}/{c.message_id}"
+            await cb.message.answer(f"📦 <b>كليشة مشاركة السحب:</b>\n\n<code>{share_text}</code>", parse_mode=ParseMode.HTML)
+    await cb.answer()
+
+@roulette_router.callback_query(F.data == "create_yastahiq")
+async def create_yastahiq_start(cb: CallbackQuery, state: FSMContext) -> None:
+    await start_create_flow(cb, state, ContestType.YASTAHIQ)
+
+@roulette_router.callback_query(F.data == "create_vote")
+async def create_vote_start(cb: CallbackQuery, state: FSMContext) -> None:
+    await start_create_flow(cb, state, ContestType.VOTE)
+
+@roulette_router.callback_query(F.data == "section_manage_chats")
+async def section_manage_chats(cb: CallbackQuery) -> None:
+    from .sections import section_account
+    await section_account(cb)

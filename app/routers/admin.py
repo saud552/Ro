@@ -296,3 +296,42 @@ async def admin_bulk_add_questions(message: Message) -> None:
         # Assuming 0 as general bank for now
         count = await service.bulk_add_questions(0, message.text)
         await message.answer(f"✅ تم إضافة {count} سؤال لبنك الأسئلة بنجاح.")
+
+@admin_router.callback_query(F.data == "admin_referral_settings")
+async def admin_referral_settings(cb: CallbackQuery) -> None:
+    if not _is_admin(cb.from_user.id):
+        await cb.answer()
+        return
+
+    async for session in get_async_session():
+        repo = AppSettingRepository(session)
+        enabled = await repo.get_value("referral_enabled", "yes")
+        points = await repo.get_value("referral_points", "10")
+
+    text = (
+        "👥 <b>إعدادات نظام الإحالة</b>\n\n"
+        f"الحالة الحالية: <b>{'مفعل' if enabled == 'yes' else 'معطل'}</b>\n"
+        f"النقاط لكل إحالة: <b>{points}</b>\n\n"
+        "اختر الإجراء المطلوب:"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="تغيير الحالة", callback_data="admin_toggle_ref")],
+        [InlineKeyboardButton(text="تعديل النقاط", callback_data="admin_edit_ref_points")],
+        [InlineKeyboardButton(text="رجوع", callback_data="admin_back")]
+    ])
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    await cb.answer()
+
+@admin_router.callback_query(F.data == "admin_toggle_ref")
+async def admin_toggle_ref(cb: CallbackQuery) -> None:
+    async for session in get_async_session():
+        repo = AppSettingRepository(session)
+        current = await repo.get_value("referral_enabled", "yes")
+        new_val = "no" if current == "yes" else "yes"
+        await repo.set_value("referral_enabled", new_val)
+    await admin_referral_settings(cb)
+
+@admin_router.callback_query(F.data == "admin_share_contest")
+async def admin_share_contest(cb: CallbackQuery) -> None:
+    # Use inline query for sharing
+    await cb.answer("يمكنك استخدام البحث المباشر لمشاركة مسابقاتك!", show_alert=True)

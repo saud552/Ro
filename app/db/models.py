@@ -179,7 +179,10 @@ class RouletteGate(Base):
     invite_link: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     gate_type: Mapped[str] = mapped_column(
         String(16), default="channel"
-    )  # channel/group/contest/vote
+    )  # channel/group/contest/vote/yastahiq
+
+    target_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    target_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     contest: Mapped["Contest"] = relationship(back_populates="gates")
 

@@ -81,6 +81,17 @@ async def handle_vote_selection(cb: CallbackQuery) -> None:
             return
 
         entry = await service.entry_repo.get_by_id(entry_id)
+        if c.type == ContestType.YASTAHIQ:
+            text = (
+                f"🔥 <b>دعم المتسابق: {entry.entry_name}</b>\n\n"
+                f"قم بنسخ أحد النصوص التالية وإرسالها في المجموعة المحددة:\n\n"
+                f"1️⃣ <code>يستحق</code>\n"
+                f"2️⃣ <code>يستحق {entry.entry_name}</code>\n\n"
+                "📌 عند إرسال الكلمة، سيتم احتساب تصويتك تلقائياً."
+            )
+            await cb.message.answer(text, parse_mode=ParseMode.HTML)
+            await cb.answer()
+            return
         if not entry:
             await cb.answer("⚠️ المتسابق غير موجود.", show_alert=True)
             return

@@ -54,7 +54,7 @@ def gate_choice_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="تخطي", callback_data="gate_skip")],
-            [InlineKeyboardButton(text="إضافة قناة شرط", callback_data="gate_add")],
+            [InlineKeyboardButton(text="إضافة شرط", callback_data="gate_add")],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
     )
@@ -63,7 +63,7 @@ def gate_choice_kb() -> InlineKeyboardMarkup:
 def gate_more_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="إضافة قناة أخرى", callback_data="gate_add")],
+            [InlineKeyboardButton(text="إضافة شرط آخر", callback_data="gate_add")],
             [InlineKeyboardButton(text="متابعة", callback_data="gate_done")],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
@@ -74,9 +74,9 @@ def gates_manage_kb(num_gates: int) -> InlineKeyboardMarkup:
     rows = []
     for i in range(num_gates):
         rows.append(
-            [InlineKeyboardButton(text=f"حذف القناة #{i+1}", callback_data=f"gate_remove:{i}")]
+            [InlineKeyboardButton(text=f"حذف الشرط #{i+1}", callback_data=f"gate_remove:{i}")]
         )
-    rows.append([InlineKeyboardButton(text="إضافة قناة أخرى", callback_data="gate_add")])
+    rows.append([InlineKeyboardButton(text="إضافة شرط آخر", callback_data="gate_add")])
     rows.append([InlineKeyboardButton(text="متابعة", callback_data="gate_done")])
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -96,14 +96,12 @@ def confirm_cancel_kb() -> InlineKeyboardMarkup:
 def gate_add_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="إضافة قناة كشرط", callback_data="gate_add_channel")],
-            [InlineKeyboardButton(text="إضافة مجموعة كشرط", callback_data="gate_add_group")],
-            [
-                InlineKeyboardButton(
-                    text="اختيار من قائمة القنوات/المجموعات", callback_data="gate_pick"
-                )
-            ],
-            [InlineKeyboardButton(text="رجوع", callback_data="back")],
+            [InlineKeyboardButton(text="📢 قناة شرط", callback_data="gate_add_channel")],
+            [InlineKeyboardButton(text="👥 مجموعة شرط", callback_data="gate_add_group")],
+            [InlineKeyboardButton(text="🗳 تصويت لمتسابق", callback_data="gate_add_vote")],
+            [InlineKeyboardButton(text="🔥 تعليق يستحق", callback_data="gate_add_yastahiq")],
+            [InlineKeyboardButton(text="🎰 اشتراك في روليت آخر", callback_data="gate_add_contest")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
         ]
     )
 

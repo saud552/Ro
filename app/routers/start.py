@@ -6,11 +6,13 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 
 from ..db import get_async_session
 from ..db.repositories import AppSettingRepository, UserRepository
 from ..keyboards.common import forced_sub_kb, main_menu_kb
 from ..services.subscription import SubscriptionService
+from ..db.models import User
 
 start_router = Router(name="start")
 
@@ -30,13 +32,32 @@ async def handle_start(message: Message, state: FSMContext) -> None:
 
         # 1. Register or update user & Referral logic
         args = (message.text or "").split(maxsplit=1)
-        referred_by = None
+        referred_by_id = None
         if len(args) == 2 and args[1].isdigit():
-            referred_by = int(args[1])
+            referred_by_id = int(args[1])
+
+        # Check if user already exists
+        existing_user = await user_repo.get_by_id(message.from_user.id)
+        is_new = existing_user is None
 
         user = await user_repo.get_or_create(message.from_user.id, message.from_user.username)
-        if referred_by and not user.referred_by_id and referred_by != user.id:
-            user.referred_by_id = referred_by
+
+        if is_new and referred_by_id and referred_by_id != user.id:
+            # Award points to the inviter
+            inviter = await user_repo.get_by_id(referred_by_id)
+            if inviter:
+                user.referred_by_id = referred_by_id
+                setting_repo = AppSettingRepository(session)
+                ref_enabled = await setting_repo.get_value("referral_enabled", "yes")
+                if ref_enabled == "yes":
+                    points_to_award = int(await setting_repo.get_value("referral_points", "10"))
+                    inviter.points += points_to_award
+                    with suppress(Exception):
+                        await message.bot.send_message(
+                            referred_by_id,
+                            f"🎊 مستخدم جديد انضم عبر رابطك! حصلت على {points_to_award} نقطة."
+                        )
+
         await user_repo.commit()
 
         # 2. Check Forced Subscription
