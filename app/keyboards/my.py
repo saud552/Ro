@@ -31,39 +31,49 @@ def my_manage_kb(
     # Static info button (no action)
     rows.append(
         [
-            InlineKeyboardButton(text=f"المشاركون: {participants_count}", callback_data="noop"),
+            InlineKeyboardButton(text=f"📊 المشاركون: {participants_count}", callback_data="noop"),
         ]
     )
 
     draw_callback = f"draw:{contest_id}"
-    draw_text = "بدء السحب"
+    draw_text = "🎯 بدء السحب"
     if ctype == ContestType.VOTE:
         draw_callback = f"draw_vote:{contest_id}"
-        draw_text = "إعلان الفائزين"
+        draw_text = "🎉 إعلان الفائزين"
+    elif ctype == ContestType.QUIZ:
+        draw_callback = f"quiz_finish:{contest_id}"
+        draw_text = "🎉 إنهاء وإعلان النتائج"
 
     rows.append(
         [
             InlineKeyboardButton(
-                text=("أوقف المشاركة" if is_open else "استئناف المشاركة"),
+                text=("⏸️ أوقف المشاركة" if is_open else "▶️ استئناف المشاركة"),
                 callback_data=(f"pause:{contest_id}" if is_open else f"resume:{contest_id}"),
             ),
             InlineKeyboardButton(text=draw_text, callback_data=draw_callback),
         ]
     )
+
+    # New row for Publication Renewal and Deletion
+    rows.append([
+        InlineKeyboardButton(text="🔄 تجديد النشر", callback_data=f"renew_pub:{contest_id}"),
+        InlineKeyboardButton(text="🗑️ إلغاء الفعالية", callback_data=f"cancel_evt_ask:{contest_id}")
+    ])
+
     rows.append(
         [
-            InlineKeyboardButton(text="تحديث", callback_data=f"myr:{contest_id}"),
-            InlineKeyboardButton(text="سحوبات القناة", callback_data=f"mychlist:{channel_id}"),
+            InlineKeyboardButton(text="🔄 تحديث", callback_data=f"myr:{contest_id}"),
+            InlineKeyboardButton(text="📋 سحوبات القناة", callback_data=f"mychlist:{channel_id}"),
         ]
     )
-    rows.append([InlineKeyboardButton(text="سحوباتي", callback_data="my_draws")])
+    rows.append([InlineKeyboardButton(text="🔙 سحوباتي", callback_data="my_draws")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def manage_draw_kb(contest_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="إدارة هذا السحب", callback_data=f"myr:{contest_id}")],
-            [InlineKeyboardButton(text="سحوباتي", callback_data="my_draws")],
+            [InlineKeyboardButton(text="⚙️ إدارة هذه الفعالية", callback_data=f"myr:{contest_id}")],
+            [InlineKeyboardButton(text="🔙 سحوباتي", callback_data="my_draws")],
         ]
     )

@@ -6,13 +6,14 @@ from typing import List, Set, Tuple
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
-from aiogram.types import CallbackQuery, Message
-from sqlalchemy import func, select
+from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy import func, select, delete
 
 from ..db import get_async_session
-from ..db.models import Contest, ContestEntry, ContestType
+from ..db.models import Contest, ContestEntry, ContestType, RouletteGate
 from ..keyboards.my import my_channels_kb, my_manage_kb, my_roulettes_kb
 from ..services.formatting import StyledText
+from ..services.context import runtime
 
 my_router = Router(name="my")
 
@@ -25,7 +26,6 @@ async def _is_admin_in_channel(bot, chat_id: int, user_id: int) -> bool:
 
 
 async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
-    # Gather channels with open contests
     channels: Set[int] = set()
     owner_channels: Set[int] = set()
     async for session in get_async_session():
@@ -41,7 +41,6 @@ async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
     results: List[Tuple[int, str]] = []
     for ch_id in sorted(channels):
         if (ch_id in owner_channels) or (await _is_admin_in_channel(bot, ch_id, user_id)):
-            # Resolve title
             title = None
             with suppress(Exception):
                 c = await bot.get_chat(ch_id)
@@ -50,31 +49,6 @@ async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
                 title = f"قناة {ch_id}"
             results.append((ch_id, title))
     return results
-
-
-async def _list_open_roulettes(channel_id: int) -> List[Tuple[int, str]]:
-    """Legacy helper for tests."""
-    async for session in get_async_session():
-        rows = (
-            await session.execute(
-                select(Contest.id, Contest.text_raw)
-                .where(
-                    (Contest.channel_id == channel_id)
-                    & (Contest.is_open.is_(True))
-                    & (Contest.type == ContestType.ROULETTE)
-                )
-                .order_by(Contest.id.desc())
-            )
-        ).all()
-        res: List[Tuple[int, str]] = []
-        for rid, text in rows:
-            preview = (text or "").strip()
-            label = f"سحب #{rid} — {preview}"
-            if len(label) > 32:
-                label = label[:29] + "..."
-            res.append((rid, label))
-        return res
-    return []
 
 
 async def _list_open_contests(channel_id: int) -> List[Tuple[int, str]]:
@@ -156,7 +130,7 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {'روليت' if r.type == ContestType.ROULETTE else 'تصويت'}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
+        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {r.type.value}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
         await cb.message.edit_text(
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
@@ -209,7 +183,7 @@ async def my_roulette(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {'روليت' if r.type == ContestType.ROULETTE else 'تصويت'}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
+        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {r.type.value}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
         await cb.message.edit_text(
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
@@ -217,6 +191,73 @@ async def my_roulette(cb: CallbackQuery) -> None:
         )
         await cb.answer()
 
+# --- New Handlers for Deletion and Renewal ---
+
+@my_router.callback_query(F.data.startswith("renew_pub:"))
+async def renew_publication(cb: CallbackQuery) -> None:
+    contest_id = int(cb.data.split(":")[1])
+    async for session in get_async_session():
+        c = await session.get(Contest, contest_id)
+        if not c or not await _can_manage(cb.bot, cb.from_user.id, c):
+             await cb.answer("غير مصرح", show_alert=True)
+             return
+
+        # Resolve keyboard and text
+        gate_rows = (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id))).scalars().all()
+        gate_links = [(g.channel_title, g.invite_link) for g in gate_rows if g.invite_link]
+
+        from ..keyboards.channel import roulette_controls_kb
+        from ..keyboards.voting import voting_main_kb
+
+        if c.type == ContestType.VOTE:
+            kb = voting_main_kb(c.id, bot_username=runtime.bot_username)
+        elif c.type == ContestType.QUIZ:
+             kb = InlineKeyboardMarkup(inline_keyboard=[
+                 [InlineKeyboardButton(text="🏆 المتصدرين", callback_data=f"leaderboard:{c.id}")]
+             ])
+        else:
+            kb = roulette_controls_kb(c.id, c.is_open, runtime.bot_username, gate_links)
+
+        from ..routers.roulette import _build_channel_post_text
+        participants_count = (await session.execute(select(func.count()).select_from(ContestEntry).where(ContestEntry.contest_id == c.id))).scalar_one()
+        text = _build_channel_post_text(c, participants_count)
+
+        try:
+            msg = await cb.bot.send_message(chat_id=c.channel_id, text=text, reply_markup=kb, parse_mode=ParseMode.HTML)
+            c.message_id = msg.message_id
+            await session.commit()
+            await cb.message.answer("✅ تم تجديد نشر الفعالية في القناة بنجاح.")
+        except Exception:
+            await cb.message.answer("❌ فشل تجديد النشر. تأكد من صلاحيات البوت.")
+    await cb.answer()
+
+@my_router.callback_query(F.data.startswith("cancel_evt_ask:"))
+async def cancel_event_ask(cb: CallbackQuery) -> None:
+    contest_id = int(cb.data.split(":")[1])
+    text = "⚠️ <b>تنبيه هام!</b>\n\nأنت على وشك حذف هذه الفعالية نهائياً. سيؤدي هذا إلى حذف جميع البيانات المرتبطة بها (المشاركين، الأصوات) ولن تتمكن من استعادتها.\n\nهل أنت متأكد؟"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ نعم، احذف الفعالية", callback_data=f"cancel_evt_exec:{contest_id}")],
+        [InlineKeyboardButton(text="🔙 تراجع", callback_data=f"myr:{contest_id}")]
+    ])
+    await cb.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    await cb.answer()
+
+@my_router.callback_query(F.data.startswith("cancel_evt_exec:"))
+async def cancel_event_exec(cb: CallbackQuery) -> None:
+    contest_id = int(cb.data.split(":")[1])
+    async for session in get_async_session():
+        c = await session.get(Contest, contest_id)
+        if not c or not await _can_manage(cb.bot, cb.from_user.id, c):
+             await cb.answer("غير مصرح", show_alert=True)
+             return
+
+        await session.delete(c)
+        await session.commit()
+
+    await cb.message.edit_text("✅ تم حذف وإلغاء الفعالية بنجاح.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 العودة للمسابقات", callback_data="my_draws")]
+    ]))
+    await cb.answer()
 
 @my_router.callback_query(F.data == "noop")
 async def noop_cb(cb: CallbackQuery) -> None:
