@@ -7,6 +7,7 @@ from aiogram.enums import ChatType, ParseMode
 
 from ..db import get_async_session
 from ..services.yastahiq import YastahiqService
+from ..utils.compat import safe_answer
 
 yastahiq_router = Router(name="yastahiq")
 
@@ -21,7 +22,7 @@ async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
         from ..db.models import ContestEntry
         entry = await session.get(ContestEntry, entry_id)
         if not entry:
-            await cb.answer("⚠️ المتسابق غير موجود.")
+            await safe_answer(cb, "⚠️ المتسابق غير موجود.")
             return
 
         text = (
@@ -31,13 +32,17 @@ async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
             f"2️⃣ <code>يستحق {entry.entry_name}</code>\n\n"
             "📌 عند إرسال الكلمة، سيتم احتساب تصويتك تلقائياً."
         )
-        await cb.message.answer(text, parse_mode=ParseMode.HTML)
-    await cb.answer()
+        if cb.id == "0":
+            await cb.message.answer(text, parse_mode=ParseMode.HTML)
+        else:
+            await cb.message.edit_text(text, parse_mode=ParseMode.HTML)
+
+    await safe_answer(cb)
 
 @yastahiq_router.message(F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
 async def handle_group_message(message: Message) -> None:
     """Listener for keywords in groups to support 'Yastahiq' contests."""
-    text = message.text or message.caption
+    text = (message.text or message.caption or "").strip()
     if not text:
         return
 
@@ -62,13 +67,17 @@ async def handle_group_message(message: Message) -> None:
 
         # 2. Try by name/code if not success
         if not success:
+            # Check if text is exactly keyword + name/code
             target = text.replace(keyword, "", 1).strip()
             if target:
                 success = await service.add_vote_by_name(contest.id, target)
                 target_name = target
 
         if success:
-            await message.reply(
-                f"✅ تم احتساب تصويتك لـ <a href='tg://user?id={message.from_user.id}'>{target_name}</a> بنجاح!",
-                parse_mode=ParseMode.HTML
-            )
+            try:
+                await message.reply(
+                    f"✅ تم احتساب تصويتك لـ <b>{target_name}</b> بنجاح!",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception:
+                pass

@@ -64,31 +64,40 @@ async def handle_entry_view(cb: CallbackQuery, state: FSMContext) -> None:
             await safe_answer(cb, "⚠️ المتسابق غير موجود.", show_alert=True)
             return
 
-        # 1. Mandatory Sub Check
+        # 1. Mandatory Sub Check (Bot channel + Contest channel)
         sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
         if not c.sub_check_disabled:
+            # Bot base channel
             if not await sub_service.check_forced_subscription(cb.from_user.id):
-                 await cb.message.answer("⚠️ يجب الاشتراك في قناة البوت أولاً للتصويت!")
+                 await cb.message.answer("❌ يرجى الاشتراك في قناة البوت أولاً للمتابعة.")
                  await safe_answer(cb)
                  return
 
-        # 2. Gate Check
+            # Contest channel/group
+            if not await sub_service.is_member(c.channel_id, cb.from_user.id):
+                 await cb.message.answer("❌ يجب أن تكون عضواً في القناة/المجموعة المخصصة لهذه المسابقة لتتمكن من التصويت.")
+                 await safe_answer(cb)
+                 return
+
+        # 2. Gate Check (Advanced conditions)
         gates = (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == contest_id))).scalars().all()
         for gate in gates:
-            try:
-                member = await cb.bot.get_chat_member(gate.channel_id, cb.from_user.id)
-                if member.status in {"left", "kicked"}:
-                     await cb.message.answer(f"⚠️ يجب الانضمام لقناة: {gate.channel_title} للتصويت.")
-                     await safe_answer(cb)
-                     return
-            except Exception:
-                pass
+            if not await sub_service.check_gate(cb.from_user.id, gate, session):
+                 if gate.gate_type == "channel":
+                      await cb.message.answer(f"⚠️ يجب الانضمام لقناة: {gate.channel_title}")
+                 elif gate.gate_type == "contest":
+                      await cb.message.answer(f"⚠️ يجب الانضمام للمسابقة رقم {gate.target_id} أولاً!")
+                 elif gate.gate_type == "vote":
+                      await cb.message.answer(f"⚠️ يجب التصويت للمتسابق ذو الرمز {gate.target_code} في المسابقة {gate.target_id}!")
+                 elif gate.gate_type == "yastahiq":
+                      await cb.message.answer("⚠️ يجب أن يكون لديك نقاط تفاعل في المجموعة لاستكمال هذا الشرط.")
+                 await safe_answer(cb)
+                 return
 
         # 3. Antibot Challenge (Voter)
         if c.anti_bot_enabled:
              challenge_text, answer = AntiBotService.generate_math_challenge()
              kb = AntiBotService.get_challenge_keyboard(answer)
-             # Reuse standard callback but handled in VotingFlow
              await state.set_state(VotingFlow.await_voter_antibot)
              await state.update_data(cid=contest_id, eid=entry_id, ans=answer)
              if cb.id == "0":
@@ -119,12 +128,12 @@ async def show_voting_options(cb: CallbackQuery, contest: Contest, entry: Contes
         reply_markup = voting_selection_kb(contest.id, entry.id, contest.vote_mode.value if contest.vote_mode else "normal")
 
     try:
-        if cb.id == "0":
-            await cb.message.answer(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        if cb.id == "0" or not cb.message:
+            await cb.bot.send_message(cb.from_user.id, text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         else:
             await cb.message.edit_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     except Exception:
-         await cb.message.answer(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+         await cb.bot.send_message(cb.from_user.id, text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     await safe_answer(cb)
 
 @voting_router.callback_query(VotingFlow.await_voter_antibot, F.data.startswith("antibot_ans:"))
@@ -162,11 +171,9 @@ async def handle_normal_vote(cb: CallbackQuery) -> None:
         success = await service.add_vote(contest_id, entry_id, cb.from_user.id)
         if success:
             await safe_answer(cb, "✅ تم احتساب تصويتك بنجاح!")
-            # Refresh current entry view
             entry = await service.entry_repo.get_by_id(entry_id)
             c = await service.get_contest(contest_id)
 
-            # Update his post in channel
             if entry.message_id:
                  kb = contestant_vote_kb(contest_id, entry_id, entry.votes_count, entry.stars_received, c.vote_mode.value if c.vote_mode else "normal", runtime.bot_username)
                  try:
@@ -178,10 +185,10 @@ async def handle_normal_vote(cb: CallbackQuery) -> None:
                 f"👤 المتسابق: <b>{entry.entry_name}</b>\n"
                 f"🗳 عدد الأصوات: <b>{entry.votes_count}</b>\n"
                 f"⭐️ النجوم المستلمة: <b>{entry.stars_received}</b>\n\n"
-                "اختر طريقة التصويت:"
+                "✅ <b>تم احتساب تصويتك بنجاح!</b>"
             )
             try:
-                await cb.message.edit_text(text, reply_markup=voting_selection_kb(contest_id, entry_id, c.vote_mode.value if c.vote_mode else "normal"), parse_mode=ParseMode.HTML)
+                await cb.message.edit_text(text, reply_markup=None, parse_mode=ParseMode.HTML)
             except Exception:
                  pass
         else:
@@ -193,9 +200,9 @@ async def handle_star_vote_prepare(cb: CallbackQuery) -> None:
     contest_id = int(parts[1])
     entry_id = int(parts[2])
     try:
-        await cb.message.edit_text("كم عدد النجوم التي ترغب بدعم المتسابق بها؟", reply_markup=star_amounts_kb(contest_id, entry_id))
+        await cb.message.edit_text("⭐️ كم عدد النجوم التي ترغب بدعم المتسابق بها؟", reply_markup=star_amounts_kb(contest_id, entry_id))
     except Exception:
-        await cb.message.answer("كم عدد النجوم التي ترغب بدعم المتسابق بها؟", reply_markup=star_amounts_kb(contest_id, entry_id))
+        await cb.message.answer("⭐️ كم عدد النجوم التي ترغب بدعم المتسابق بها؟", reply_markup=star_amounts_kb(contest_id, entry_id))
     await safe_answer(cb)
 
 @voting_router.callback_query(F.data.startswith("vote_star_pay:"))
@@ -208,14 +215,17 @@ async def handle_star_vote_invoice(cb: CallbackQuery) -> None:
     payload = f"{PaymentType.STAR_VOTE.value}:{contest_id}:{entry_id}"
 
     prices = [LabeledPrice(label="دعم المتسابق بنجوم", amount=stars_amount)]
-    await cb.bot.send_invoice(
-        chat_id=cb.from_user.id,
-        title="دعم متسابق",
-        description=f"دعم المتسابق بنجوم في مسابقة التصويت رقم {contest_id}",
-        payload=payload,
-        currency="XTR",
-        prices=prices
-    )
+    try:
+        await cb.bot.send_invoice(
+            chat_id=cb.from_user.id,
+            title="🌟 دعم متسابق",
+            description=f"دعم المتسابق بنجوم في مسابقة التصويت رقم {contest_id}",
+            payload=payload,
+            currency="XTR",
+            prices=prices
+        )
+    except Exception:
+        await cb.message.answer("❌ فشل إنشاء الفاتورة. حاول مجدداً لاحقاً.")
     await safe_answer(cb)
 
 # --- Registration Handlers ---
@@ -230,10 +240,23 @@ async def start_registration(cb: CallbackQuery, state: FSMContext) -> None:
             await safe_answer(cb, f"⚠️ أنت مسجل بالفعل باسم: {entry.entry_name}", show_alert=True)
             return
 
+        # Sub check for registration
+        sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
+        c = await service.get_contest(contest_id)
+        if c and not c.sub_check_disabled:
+            if not await sub_service.check_forced_subscription(cb.from_user.id):
+                 await cb.message.answer("❌ يجب الاشتراك في قناة البوت أولاً للمشاركة.")
+                 await safe_answer(cb)
+                 return
+            if not await sub_service.is_member(c.channel_id, cb.from_user.id):
+                 await cb.message.answer("❌ يجب أن تكون عضواً في القناة للمشاركة كمتسابق.")
+                 await safe_answer(cb)
+                 return
+
     await state.set_state(VotingFlow.await_contestant_name)
     await state.update_data(cid=contest_id)
-    await cb.message.answer("يرجى إرسال الاسم الذي ترغب بالمشاركة به في المسابقة أو اضغط الزر أدناه لاستخدام اسم حسابك:",
-                           reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="استخدم اسم حسابي", callback_data=f"reg_use_name:{contest_id}")]]))
+    await cb.message.answer("✍️ يرجى إرسال الاسم الذي ترغب بالمشاركة به في المسابقة أو اضغط الزر أدناه لاستخدام اسم حسابك:",
+                           reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="👤 استخدم اسم حسابي", callback_data=f"reg_use_name:{contest_id}")]]))
     await safe_answer(cb)
 
 @voting_router.callback_query(F.data.startswith("reg_use_name:"))
@@ -254,7 +277,7 @@ async def reg_use_name_callback(cb: CallbackQuery, state: FSMContext) -> None:
                  await session.commit()
 
                  link = f"https://t.me/c/{str(c.channel_id).replace('-100','')}/{msg.message_id}"
-                 await cb.message.answer(f"✅ تم تسجيلك بنجاح! رمز التصويت الخاص بك هو: <code>{entry.unique_code}</code>\nرابط مشاركتك: {link}", parse_mode=ParseMode.HTML)
+                 await cb.message.answer(f"✅ تم تسجيلك بنجاح!\n🆔 رمز التصويت الخاص بك هو: <code>{entry.unique_code}</code>\n🔗 رابط مشاركتك: {link}", parse_mode=ParseMode.HTML)
              except Exception:
                  await cb.message.answer(f"✅ تم تسجيلك بنجاح! رمز التصويت الخاص بك هو: <code>{entry.unique_code}</code>", parse_mode=ParseMode.HTML)
 
@@ -265,10 +288,10 @@ async def reg_use_name_callback(cb: CallbackQuery, state: FSMContext) -> None:
 async def complete_registration(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     contest_id = data.get("cid")
-    name = message.text.strip()
+    name = (message.text or "").strip()
 
-    if len(name) > 64:
-        await message.answer("⚠️ الاسم طويل جداً، يرجى إرسال اسم أقل من 64 حرف.")
+    if not name or len(name) > 64:
+        await message.answer("⚠️ يرجى إرسال اسم صحيح أقل من 64 حرف.")
         return
 
     async for session in get_async_session():
@@ -285,55 +308,11 @@ async def complete_registration(message: Message, state: FSMContext) -> None:
                  await session.commit()
 
                  link = f"https://t.me/c/{str(c.channel_id).replace('-100','')}/{msg.message_id}"
-                 await message.answer(f"✅ تم تسجيلك بنجاح! رمز التصويت الخاص بك هو: <code>{entry.unique_code}</code>\nرابط مشاركتك: {link}", parse_mode=ParseMode.HTML)
+                 await message.answer(f"✅ تم تسجيلك بنجاح!\n🆔 رمز التصويت الخاص بك هو: <code>{entry.unique_code}</code>\n🔗 رابط مشاركتك: {link}", parse_mode=ParseMode.HTML)
              except Exception:
                  await message.answer(f"✅ تم تسجيلك بنجاح! رمز التصويت الخاص بك هو: <code>{entry.unique_code}</code>", parse_mode=ParseMode.HTML)
 
     await state.clear()
-
-# --- Payment Callback Handlers ---
-
-@voting_router.pre_checkout_query()
-async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery):
-    await pre_checkout_query.answer(ok=True)
-
-@voting_router.message(F.successful_payment)
-async def handle_successful_payment(message: Message):
-    payload = message.successful_payment.invoice_payload
-    stars_amount = message.successful_payment.total_amount
-    user_id = message.from_user.id
-
-    if payload.startswith(PaymentType.STAR_VOTE.value):
-        parts = payload.split(":")
-        contest_id = int(parts[1])
-        entry_id = int(parts[2])
-
-        async for session in get_async_session():
-            service = VotingService(session)
-            success = await service.add_vote(contest_id, entry_id, user_id, is_stars=True, stars_amount=stars_amount)
-            if success:
-                await message.answer(f"✅ تم استلام {stars_amount} نجمة واحتسابها كدعم للمتسابق! شكراً لك.")
-                await log_purchase(user_id, payload, stars_amount)
-
-                entry = await service.entry_repo.get_by_id(entry_id)
-                c = await service.get_contest(contest_id)
-                if entry and entry.message_id:
-                     kb = contestant_vote_kb(contest_id, entry_id, entry.votes_count, entry.stars_received, c.vote_mode.value if c.vote_mode else "normal", runtime.bot_username)
-                     try:
-                         await message.bot.edit_message_reply_markup(chat_id=c.channel_id, message_id=entry.message_id, reply_markup=kb)
-                     except Exception:
-                         pass
-            else:
-                await message.answer("⚠️ حدث خطأ أثناء احتساب النجوم، يرجى مراجعة الإدارة.")
-    else:
-        from ..services.payments import grant_monthly, grant_one_time
-        if payload == PaymentType.MONTHLY.value:
-            await grant_monthly(user_id)
-            await message.answer("✅ تم تفعيل الاشتراك الشهري بنجاح!")
-        elif payload == PaymentType.ONETIME.value:
-            await grant_one_time(user_id)
-            await message.answer("✅ تم إضافة رصيد إنشاء مسابقة بنجاح!")
-        await log_purchase(user_id, payload, stars_amount)
 
 # --- Leaderboard and Display ---
 
@@ -349,7 +328,7 @@ async def handle_leaderboard_view(cb: CallbackQuery) -> None:
             await safe_answer(cb, "⚠️ لا يوجد متسابقون حالياً.", show_alert=True)
             return
 
-        lines = [f"🏆 <b>قائمة المتصدرين في مسابقة {contest_id}:</b>\n"]
+        lines = [f"🏆 <b>قائمة المتصدرين في المسابقة #{contest_id}:</b>\n"]
         for idx, entry in enumerate(top_entries, start=1):
             lines.append(f"{idx}. <b>{entry.entry_name}</b>: <b>{entry.votes_count}</b> ❤️")
 
@@ -359,25 +338,6 @@ async def handle_leaderboard_view(cb: CallbackQuery) -> None:
             await cb.message.edit_text(text, reply_markup=back_kb(), parse_mode=ParseMode.HTML)
         except Exception:
             await cb.message.answer(text, reply_markup=back_kb(), parse_mode=ParseMode.HTML)
-    await safe_answer(cb)
-
-@voting_router.callback_query(F.data.startswith("vote_refresh:"))
-async def handle_vote_refresh(cb: CallbackQuery) -> None:
-    contest_id = int(cb.data.split(":")[-1])
-
-    async for session in get_async_session():
-        service = VotingService(session)
-        c = await service.get_contest(contest_id)
-
-        text = (
-            f"🗳 <b>مسابقة التصويت جارية!</b>\n"
-            f"يمكنك التصويت لأحد المتسابقين أدناه:\n"
-            f"⭐️ النجوم متاحة: {'نعم' if c.vote_mode in {VoteMode.STARS, VoteMode.BOTH} else 'لا'}"
-        )
-        try:
-            await cb.message.edit_text(text, reply_markup=voting_main_kb(contest_id, bot_username=runtime.bot_username), parse_mode=ParseMode.HTML)
-        except Exception:
-             await cb.message.answer(text, reply_markup=voting_main_kb(contest_id, bot_username=runtime.bot_username), parse_mode=ParseMode.HTML)
     await safe_answer(cb)
 
 @voting_router.callback_query(F.data.startswith("draw_vote:"))
@@ -423,3 +383,47 @@ async def handle_vote_draw(cb: CallbackQuery) -> None:
         c.closed_at = datetime.now(timezone.utc)
         await session.commit()
     await safe_answer(cb, "✅ تم إعلان النتائج بنجاح!")
+
+# --- Global Commands & Payment ---
+
+@voting_router.pre_checkout_query()
+async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery):
+    await pre_checkout_query.answer(ok=True)
+
+@voting_router.message(F.successful_payment)
+async def handle_successful_payment(message: Message):
+    payload = message.successful_payment.invoice_payload
+    stars_amount = message.successful_payment.total_amount
+    user_id = message.from_user.id
+
+    if payload.startswith(PaymentType.STAR_VOTE.value):
+        parts = payload.split(":")
+        contest_id = int(parts[1])
+        entry_id = int(parts[2])
+
+        async for session in get_async_session():
+            service = VotingService(session)
+            success = await service.add_vote(contest_id, entry_id, user_id, is_stars=True, stars_amount=stars_amount)
+            if success:
+                await message.answer(f"✅ تم استلام {stars_amount} نجمة واحتسابها كدعم للمتسابق! شكراً لك.")
+                await log_purchase(user_id, payload, stars_amount)
+
+                entry = await service.entry_repo.get_by_id(entry_id)
+                c = await service.get_contest(contest_id)
+                if entry and entry.message_id:
+                     kb = contestant_vote_kb(contest_id, entry_id, entry.votes_count, entry.stars_received, c.vote_mode.value if c.vote_mode else "normal", runtime.bot_username)
+                     try:
+                         await message.bot.edit_message_reply_markup(chat_id=c.channel_id, message_id=entry.message_id, reply_markup=kb)
+                     except Exception:
+                         pass
+            else:
+                await message.answer("⚠️ حدث خطأ أثناء احتساب النجوم، يرجى مراجعة الإدارة.")
+    else:
+        from ..services.payments import grant_monthly, grant_one_time
+        if payload == PaymentType.MONTHLY.value:
+            await grant_monthly(user_id)
+            await message.answer("✅ تم تفعيل الاشتراك الشهري بنجاح!")
+        elif payload == PaymentType.ONETIME.value:
+            await grant_one_time(user_id)
+            await message.answer("✅ تم إضافة رصيد إنشاء مسابقة بنجاح!")
+        await log_purchase(user_id, payload, stars_amount)

@@ -83,9 +83,9 @@ async def _can_manage(bot, user_id: int, c: Contest) -> bool:
 async def my_entry(message: Message) -> None:
     chs = await _list_manageable_channels(message.bot, message.from_user.id)
     if not chs:
-        await message.answer("لا توجد مسابقات فعّالة حالياً.")
+        await message.answer("⚠️ لا توجد مسابقات فعّالة حالياً.")
         return
-    await message.answer("اختر قناة لإدارة سحوباتها وتصويتاتها:", reply_markup=my_channels_kb(chs))
+    await message.answer("📋 اختر قناة لإدارة سحوباتها وتصويتاتها:", reply_markup=my_channels_kb(chs))
 
 
 @my_router.callback_query(F.data.startswith("mych:"))
@@ -97,7 +97,7 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
         return
     chs = await _list_manageable_channels(cb.bot, cb.from_user.id)
     if chat_id not in {c for c, _ in chs}:
-        await cb.answer("غير مصرح")
+        await cb.answer("❌ غير مصرح لك")
         return
     async for session in get_async_session():
         r = (
@@ -116,12 +116,12 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
         )
         if not r:
             await cb.message.edit_text(
-                "لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
+                "⚠️ لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
             )
             await cb.answer()
             return
         if not await _can_manage(cb.bot, cb.from_user.id, r):
-            await cb.answer("غير مصرح", show_alert=True)
+            await cb.answer("❌ غير مصرح لك", show_alert=True)
             return
         count = (
             await session.execute(
@@ -130,7 +130,7 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {r.type.value}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
+        text = f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n{StyledText(r.text_raw, r.text_style).render()}\n\n🔹 النوع: {r.type.value}\n🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n👥 عدد المشاركين: {count}"
         await cb.message.edit_text(
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
@@ -148,16 +148,16 @@ async def my_channel_list(cb: CallbackQuery) -> None:
         return
     chs = await _list_manageable_channels(cb.bot, cb.from_user.id)
     if chat_id not in {c for c, _ in chs}:
-        await cb.answer("غير مصرح")
+        await cb.answer("❌ غير مصرح لك")
         return
     rlist = await _list_open_contests(chat_id)
     if not rlist:
         await cb.message.edit_text(
-            "لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
+            "⚠️ لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
         )
         await cb.answer()
         return
-    await cb.message.edit_text("اختر المسابقة لإدارتها:", reply_markup=my_roulettes_kb(chat_id, rlist))
+    await cb.message.edit_text("📋 اختر المسابقة لإدارتها:", reply_markup=my_roulettes_kb(chat_id, rlist))
     await cb.answer()
 
 
@@ -171,10 +171,10 @@ async def my_roulette(cb: CallbackQuery) -> None:
     async for session in get_async_session():
         r = (await session.execute(select(Contest).where(Contest.id == rid))).scalar_one_or_none()
         if not r:
-            await cb.answer("المسابقة غير موجودة", show_alert=True)
+            await cb.answer("⚠️ المسابقة غير موجودة", show_alert=True)
             return
         if not await _can_manage(cb.bot, cb.from_user.id, r):
-            await cb.answer("غير مصرح", show_alert=True)
+            await cb.answer("❌ غير مصرح لك", show_alert=True)
             return
         count = (
             await session.execute(
@@ -183,7 +183,7 @@ async def my_roulette(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"{StyledText(r.text_raw, r.text_style).render()}\n\nالنوع: {r.type.value}\nالحالة: {'مفتوح' if r.is_open else 'موقوف'}\nعدد المشاركين: {count}"
+        text = f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n{StyledText(r.text_raw, r.text_style).render()}\n\n🔹 النوع: {r.type.value}\n🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n👥 عدد المشاركين: {count}"
         await cb.message.edit_text(
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
@@ -191,7 +191,7 @@ async def my_roulette(cb: CallbackQuery) -> None:
         )
         await cb.answer()
 
-# --- New Handlers for Deletion and Renewal ---
+# --- Deletion and Renewal ---
 
 @my_router.callback_query(F.data.startswith("renew_pub:"))
 async def renew_publication(cb: CallbackQuery) -> None:
@@ -199,10 +199,9 @@ async def renew_publication(cb: CallbackQuery) -> None:
     async for session in get_async_session():
         c = await session.get(Contest, contest_id)
         if not c or not await _can_manage(cb.bot, cb.from_user.id, c):
-             await cb.answer("غير مصرح", show_alert=True)
+             await cb.answer("❌ غير مصرح لك", show_alert=True)
              return
 
-        # Resolve keyboard and text
         gate_rows = (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id))).scalars().all()
         gate_links = [(g.channel_title, g.invite_link) for g in gate_rows if g.invite_link]
 
@@ -215,6 +214,9 @@ async def renew_publication(cb: CallbackQuery) -> None:
              kb = InlineKeyboardMarkup(inline_keyboard=[
                  [InlineKeyboardButton(text="🏆 المتصدرين", callback_data=f"leaderboard:{c.id}")]
              ])
+        elif c.type == ContestType.YASTAHIQ:
+            from ..keyboards.voting import voting_main_kb
+            kb = voting_main_kb(c.id, bot_username=runtime.bot_username) # Yastahiq also uses registration button
         else:
             kb = roulette_controls_kb(c.id, c.is_open, runtime.bot_username, gate_links)
 
@@ -228,15 +230,15 @@ async def renew_publication(cb: CallbackQuery) -> None:
             await session.commit()
             await cb.message.answer("✅ تم تجديد نشر الفعالية في القناة بنجاح.")
         except Exception:
-            await cb.message.answer("❌ فشل تجديد النشر. تأكد من صلاحيات البوت.")
+            await cb.message.answer("❌ فشل تجديد النشر. تأكد من وجود البوت كمشرف وصلاحيات الإرسال.")
     await cb.answer()
 
 @my_router.callback_query(F.data.startswith("cancel_evt_ask:"))
 async def cancel_event_ask(cb: CallbackQuery) -> None:
     contest_id = int(cb.data.split(":")[1])
-    text = "⚠️ <b>تنبيه هام!</b>\n\nأنت على وشك حذف هذه الفعالية نهائياً. سيؤدي هذا إلى حذف جميع البيانات المرتبطة بها (المشاركين، الأصوات) ولن تتمكن من استعادتها.\n\nهل أنت متأكد؟"
+    text = "⚠️ <b>تنبيه هام!</b>\n\nأنت على وشك حذف هذه الفعالية نهائياً. سيؤدي هذا إلى حذف جميع البيانات المرتبطة بها (المشاركين، الأصوات، الشروط) ولن تتمكن من استعادتها.\n\nهل أنت متأكد من قرار الإلغاء؟"
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ نعم، احذف الفعالية", callback_data=f"cancel_evt_exec:{contest_id}")],
+        [InlineKeyboardButton(text="🗑️ نعم، احذف الفعالية", callback_data=f"cancel_evt_exec:{contest_id}")],
         [InlineKeyboardButton(text="🔙 تراجع", callback_data=f"myr:{contest_id}")]
     ])
     await cb.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
@@ -248,7 +250,7 @@ async def cancel_event_exec(cb: CallbackQuery) -> None:
     async for session in get_async_session():
         c = await session.get(Contest, contest_id)
         if not c or not await _can_manage(cb.bot, cb.from_user.id, c):
-             await cb.answer("غير مصرح", show_alert=True)
+             await cb.answer("❌ غير مصرح لك", show_alert=True)
              return
 
         await session.delete(c)
@@ -257,6 +259,19 @@ async def cancel_event_exec(cb: CallbackQuery) -> None:
     await cb.message.edit_text("✅ تم حذف وإلغاء الفعالية بنجاح.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 العودة للمسابقات", callback_data="my_draws")]
     ]))
+    await cb.answer()
+
+# --- Global Commands ---
+
+@my_router.callback_query(F.data == "my_draws")
+async def back_to_my_draws(cb: CallbackQuery) -> None:
+    # Use the same logic as my_entry but edit text
+    chs = await _list_manageable_channels(cb.bot, cb.from_user.id)
+    if not chs:
+        await cb.message.edit_text("⚠️ لا توجد مسابقات فعّالة حالياً.")
+        await cb.answer()
+        return
+    await cb.message.edit_text("📋 اختر قناة لإدارة سحوباتها وتصويتاتها:", reply_markup=my_channels_kb(chs))
     await cb.answer()
 
 @my_router.callback_query(F.data == "noop")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 
@@ -42,11 +43,23 @@ class SubscriptionService:
             return await self.is_member(gate.channel_id, user_id)
 
         if gate.gate_type == "vote":
-            # Check if user voted for specific contestant code
-            from ..db.models import Vote
+            # Check if user voted for specific contestant code in target contest
+            from ..db.models import Vote, ContestEntry
             from sqlalchemy import select
+
+            stmt_e = select(ContestEntry.id).where(
+                ContestEntry.contest_id == gate.target_id,
+                ContestEntry.unique_code == gate.target_code
+            )
+            res_e = await session.execute(stmt_e)
+            entry_id = res_e.scalar_one_or_none()
+
+            if not entry_id:
+                return False
+
             stmt = select(Vote).where(
                 Vote.contest_id == gate.target_id,
+                Vote.entry_id == entry_id,
                 Vote.voter_id == user_id
             )
             res = await session.execute(stmt)
@@ -62,5 +75,17 @@ class SubscriptionService:
             )
             res = await session.execute(stmt)
             return res.scalar_one_or_none() is not None
+
+        if gate.gate_type == "yastahiq":
+            # Check if user has at least 1 vote in target yastahiq contest
+            from ..db.models import ContestEntry
+            from sqlalchemy import select
+            stmt = select(ContestEntry.votes_count).where(
+                ContestEntry.contest_id == gate.target_id,
+                ContestEntry.user_id == user_id
+            )
+            res = await session.execute(stmt)
+            votes = res.scalar_one_or_none()
+            return (votes or 0) > 0
 
         return True

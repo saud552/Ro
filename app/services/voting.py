@@ -27,13 +27,13 @@ class VotingService:
     ) -> ContestEntry:
         """Register a user as a contestant in a voting contest."""
         import secrets
-
-        unique_code = secrets.token_hex(4)
+        unique_code = secrets.token_hex(4).upper()
 
         entry = ContestEntry(
             contest_id=contest_id, user_id=user_id, entry_name=entry_name, unique_code=unique_code
         )
         self.session.add(entry)
+        await self.session.flush()
         await self.session.commit()
         return entry
 
@@ -79,8 +79,10 @@ class VotingService:
         if not contest or not contest.is_open:
             return False
 
-        # Check for multiple votes if prevented
-        if contest.prevent_multiple_votes and not is_stars:
+        # 1. Enforcement of "Prevent Multiple Voting" (Normal Votes)
+        # If enabled: User can have ONLY 1 normal vote in the entire contest.
+        # If disabled: User can vote multiple times.
+        if not is_stars and contest.prevent_multiple_votes:
             if await self.vote_repo.has_voted(contest_id, voter_id):
                 return False
 
@@ -102,7 +104,7 @@ class VotingService:
         if is_stars:
             entry.stars_received += stars_amount
             # Increment votes based on ratio (default 1 star = 2 votes)
-            entry.votes_count += stars_amount * contest.star_to_vote_ratio
+            entry.votes_count += stars_amount * (contest.star_to_vote_ratio or 2)
         else:
             entry.votes_count += 1
 
