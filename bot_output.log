@@ -1,19 +1,21 @@
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/app/app/main.py", line 17, in <module>
-    from .config import settings
-  File "/app/app/config.py", line 61, in <module>
-    settings = Settings()  # type: ignore[call-arg]
-               ^^^^^^^^^^
-  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/pydantic_settings/main.py", line 144, in __init__
-    super().__init__(
-  File "/home/jules/.pyenv/versions/3.12.12/lib/python3.12/site-packages/pydantic/main.py", line 193, in __init__
-    self.__pydantic_validator__.validate_python(data, self_instance=self)
-pydantic_core._pydantic_core.ValidationError: 2 validation errors for Settings
-bot_token
-  Field required [type=missing, input_value={}, input_type=dict]
-    For further information visit https://errors.pydantic.dev/2.8/v/missing
-bot_channel
-  Field required [type=missing, input_value={}, input_type=dict]
-    For further information visit https://errors.pydantic.dev/2.8/v/missing
+INFO:aiogram.dispatcher:Start polling
+INFO:aiogram.dispatcher:Run polling for bot @RouletteKBot id=8564869368 - 'روليت خيال 🎰'
+INFO:aiogram.event:Update id=92090651 is handled. Duration 558 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090652 is handled. Duration 327 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090653 is handled. Duration 289 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090654 is handled. Duration 276 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090655 is handled. Duration 411 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090656 is handled. Duration 444 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090657 is handled. Duration 391 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090658 is handled. Duration 390 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090659 is handled. Duration 408 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090660 is handled. Duration 456 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090661 is handled. Duration 276 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090662 is handled. Duration 291 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090663 is handled. Duration 360 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090664 is handled. Duration 466 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090665 is handled. Duration 161 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090666 is handled. Duration 286 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090667 is handled. Duration 126 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090668 is handled. Duration 158 ms by bot id=8564869368
+INFO:aiogram.event:Update id=92090669 is handled. Duration 412 ms by bot id=8564869368

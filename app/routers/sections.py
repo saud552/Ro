@@ -107,8 +107,16 @@ async def section_referral(cb: CallbackQuery) -> None:
         f"🔗 رابطك: <code>{ref_link}</code>\n"
         f"💎 رصيدك الحالي: <b>{points}</b> نقطة"
     )
-    await cb.message.edit_text(text, reply_markup=back_kb(), parse_mode="HTML")
-    await cb.answer()
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 ربط قناة/مجموعات", callback_data="link_channel")],
+            [InlineKeyboardButton(text="✂️ فك ارتباط", callback_data="unlink_channel")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    from ..utils.compat import safe_edit_text, safe_answer
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
+    await safe_answer(cb)
 
 
 @sections_router.callback_query(F.data == "section_account")
@@ -137,8 +145,16 @@ async def section_account(cb: CallbackQuery) -> None:
         f"المعرف: <code>{cb.from_user.id}</code>\n\n"
         f"حالة ميزة قنوات الشرط: {status}"
     )
-    await cb.message.edit_text(text, reply_markup=back_kb(), parse_mode="HTML")
-    await cb.answer()
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 ربط قناة/مجموعات", callback_data="link_channel")],
+            [InlineKeyboardButton(text="✂️ فك ارتباط", callback_data="unlink_channel")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    from ..utils.compat import safe_edit_text, safe_answer
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
+    await safe_answer(cb)
 
 
 @sections_router.callback_query(F.data == "section_store")

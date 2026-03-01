@@ -362,7 +362,7 @@ async def go_back(cb: CallbackQuery, state: FSMContext) -> None:
     cur = await state.get_state()
     data = await state.get_data()
 
-    if data.get("sub_view") in {"gate_add", "gate_add_channel", "gate_add_group", "gate_pick", "gate_add_vote", "gate_add_contest"}:
+    if data.get("sub_view") in {"gate_add", "gate_add_channel", "gate_add_group", "gate_pick", "gate_add_vote", "gate_add_contest", "gate_add_yastahiq"}:
         gates = list(data.get("gate_channels", []))
         await state.update_data(sub_view=None)
         await state.set_state(CreateRoulette.await_gate_choice)
@@ -561,8 +561,31 @@ async def gate_type_select(cb: CallbackQuery, state: FSMContext) -> None:
             await cb.message.edit_text("📋 اختر الفعالية التي يجب على المستخدم المشاركة فيها:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
     elif gtype == "yastahiq":
-        await cb.answer("🛡️ سيتم تفعيل هذا الشرط عند إرسال الكلمات المفتاحية في المجموعة المحددة.", show_alert=True)
+        await state.update_data(sub_view="gate_add_yastahiq")
+        async for session in get_async_session():
+            links = (await session.execute(select(ChannelLink).where(ChannelLink.owner_id == cb.from_user.id))).scalars().all()
+            if not links:
+                await cb.answer("⚠️ يجب ربط مجموعة أولاً لاستخدام شرط يستحق.", show_alert=True)
+                return
 
+            rows = []
+            for l in links:
+                rows.append([InlineKeyboardButton(text=l.channel_title or str(l.channel_id), callback_data=f"gate_sel_yastahiq:{l.channel_id}")])
+            rows.append([InlineKeyboardButton(text="🔙 رجوع", callback_data="back")])
+            await cb.message.edit_text("📋 اختر المجموعة التي يجب أن يمتلك فيها المستخدم نقاط تفاعل:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+    await cb.answer()
+
+@roulette_router.callback_query(F.data.startswith("gate_sel_yastahiq:"))
+async def gate_yastahiq_selection(cb: CallbackQuery, state: FSMContext) -> None:
+    chat_id = int(cb.data.split(":")[1])
+    data = await state.get_data()
+    gates = list(data.get("gate_channels", []))
+
+    title, link = await _get_channel_title_and_link(cb.bot, chat_id)
+    gates.append({"id": chat_id, "title": f"تفاعل في {title}", "link": link, "type": "yastahiq", "target_id": chat_id})
+    await state.update_data(gate_channels=gates, sub_view=None)
+    await cb.message.edit_text(f"✅ تمت إضافة شرط التفاعل في {title}", reply_markup=gates_manage_kb(len(gates)))
     await cb.answer()
 
 @roulette_router.callback_query(F.data.startswith("gate_sel_evt:"))
@@ -1056,3 +1079,18 @@ async def count_refresh_handler(cb: CallbackQuery) -> None:
             with suppress(Exception):
                 await cb.bot.edit_message_reply_markup(chat_id=c.channel_id, message_id=c.message_id, reply_markup=kb)
     await cb.answer(f"عدد المشاركين الحالي: {count}")
+
+@roulette_router.callback_query(F.data.startswith("gate_remove:"))
+async def gate_remove_handler(cb: CallbackQuery, state: FSMContext) -> None:
+    idx = int(cb.data.split(":")[1])
+    data = await state.get_data()
+    gates = list(data.get("gate_channels", []))
+    if 0 <= idx < len(gates):
+        removed = gates.pop(idx)
+        await state.update_data(gate_channels=gates)
+        await cb.answer(f"🗑️ تم حذف: {removed.get('title')}")
+
+    if not gates:
+        await cb.message.edit_text("🛡️ إضافة شرط جديد:", reply_markup=gate_add_menu_kb())
+    else:
+        await cb.message.edit_text("🛡️ إدارة الشروط المضافة:", reply_markup=gates_manage_kb(len(gates)))
