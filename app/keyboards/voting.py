@@ -30,28 +30,31 @@ def star_ratio_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def voting_main_kb(contest_id: int, entries: list, show_reg: bool = True) -> InlineKeyboardMarkup:
-    """Main keyboard for a voting contest in the channel."""
-    buttons = []
-    # If there are few entries, show them directly. If many, we might need a search or pagination.
-    # For now, show top entries or first few.
-    for entry in entries:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=f"👤 {entry.entry_name} ({entry.votes_count} ❤️)",
-                    callback_data=f"vote_sel:{contest_id}:{entry.id}",
-                )
-            ]
-        )
+def voting_main_kb(contest_id: int, bot_username: str = "bot") -> InlineKeyboardMarkup:
+    """Initial keyboard for a voting contest in the channel."""
+    reg_url = f"https://t.me/{bot_username}?start=reg-{contest_id}"
+    notify_url = f"https://t.me/{bot_username}?start=notify-{contest_id}"
 
-    buttons.append(
-        [InlineKeyboardButton(text="🏆 المتصدرين", callback_data=f"leaderboard:{contest_id}")]
-    )
-    if show_reg:
-        buttons.append(
-            [InlineKeyboardButton(text="📢 انضم كمتسابق", callback_data=f"reg_contest:{contest_id}")]
-        )
+    buttons = [
+        [InlineKeyboardButton(text="📢 الاشتراك في المسابقة", url=reg_url)],
+        [InlineKeyboardButton(text="🏆 المتصدرين", callback_data=f"leaderboard:{contest_id}")],
+        [InlineKeyboardButton(text="🔔 ذكّرني إذا فزت", url=notify_url)]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def contestant_vote_kb(contest_id: int, entry_id: int, votes: int, stars: int, mode: str, bot_username: str) -> InlineKeyboardMarkup:
+    """Keyboard for an individual contestant's post in the channel."""
+    url = f"https://t.me/{bot_username}?start=vote-{contest_id}-{entry_id}"
+    buttons = []
+    if mode == "stars":
+        buttons.append([InlineKeyboardButton(text=f"⭐️ ({stars})", url=url)])
+    elif mode == "both":
+        buttons.append([
+            InlineKeyboardButton(text=f"❤️ ({votes})", url=url),
+            InlineKeyboardButton(text=f"⭐️ ({stars})", url=url)
+        ])
+    else: # normal
+        buttons.append([InlineKeyboardButton(text=f"❤️ ({votes})", url=url)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -75,7 +78,6 @@ def voting_selection_kb(contest_id: int, entry_id: int, mode: str = "normal") ->
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text="🔙 رجوع", callback_data=f"vote_refresh:{contest_id}")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -83,7 +85,6 @@ def star_amounts_kb(contest_id: int, entry_id: int) -> InlineKeyboardMarkup:
     """Keyboard for choosing how many stars to spend on a vote."""
     amounts = [1, 5, 10, 50, 100, 500]
     buttons = []
-    # Create rows of 3
     for i in range(0, len(amounts), 3):
         row = [
             InlineKeyboardButton(

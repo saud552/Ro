@@ -106,7 +106,7 @@ class PaymentService:
         await self.feature_repo.commit()
 
 
-# --- Legacy Compatibility Helpers (to be phased out) ---
+# --- Legacy Compatibility Helpers ---
 
 
 async def get_monthly_price_stars() -> int:
@@ -160,5 +160,12 @@ async def grant_one_time(user_id: int, credits: int = 1) -> None:
 
 async def log_purchase(user_id: int, payload: str, stars_amount: int) -> None:
     async for session in get_async_session():
-        repo = FeatureAccessRepository(session)
-        await repo.log_purchase(user_id, payload, stars_amount)
+        purchase = Purchase(
+            user_id=user_id,
+            stars_amount=stars_amount,
+            payload=payload,
+            status=PaymentStatus.PAID,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(purchase)
+        await session.commit()
