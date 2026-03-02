@@ -16,7 +16,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 
 from ..db import get_async_session
 from ..db.models import (
@@ -1207,16 +1207,12 @@ async def create_quiz_start(cb: CallbackQuery, state: FSMContext) -> None:
 
 
 @roulette_router.callback_query(F.data.startswith("count_refresh:"))
+@roulette_router.callback_query(F.data.startswith("count_refresh:"))
 async def count_refresh_handler(cb: CallbackQuery) -> None:
     contest_id = int(cb.data.split(":")[1])
     async for session in get_async_session():
-        count = (
-            await session.execute(
-                select(func.count())
-                .select_from(ContestEntry)
-                .where(ContestEntry.contest_id == contest_id)
-            )
-        ).scalar_one()
+        entry_repo = ContestEntryRepository(session)
+        count = await entry_repo.count_participants(contest_id)
         c = await session.get(Contest, contest_id)
         if c:
             gate_rows = (

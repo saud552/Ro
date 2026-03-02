@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import List, Set, Tuple
+from typing import List, Tuple
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from sqlalchemy import func, select
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
+from sqlalchemy import select
 
 from ..db import get_async_session
-from ..db.models import Contest, ContestEntry, ContestType, RouletteGate
+from ..db.models import Contest, ContestType, RouletteGate
+from ..db.repositories import ContestEntryRepository
 from ..keyboards.my import my_channels_kb, my_manage_kb, my_roulettes_kb
 from ..services.context import runtime
 from ..services.formatting import StyledText
@@ -19,25 +25,28 @@ my_router = Router(name="my")
 
 
 async def _is_admin_in_channel(bot, chat_id: int, user_id: int) -> bool:
-    with suppress(Exception):
-        m = await bot.get_chat_member(chat_id, user_id)
-        return getattr(m, "status", None) in {"creator", "administrator"}
-    return False
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        return member.status in {"administrator", "creator"}
+    except Exception:
+        return False
 
 
 async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
-    channels: Set[int] = set()
-    owner_channels: Set[int] = set()
+    """Return list of channels where user is admin or owner of active contests."""
     async for session in get_async_session():
-        rows = (
-            await session.execute(
-                select(Contest.channel_id, Contest.owner_id).where(Contest.is_open.is_(True))
-            )
-        ).all()
-        for ch_id, owner_id in rows:
-            channels.add(ch_id)
-            if owner_id == user_id:
-                owner_channels.add(ch_id)
+        owner_channels = (
+            (await session.execute(select(Contest.channel_id).where(Contest.owner_id == user_id)))
+            .scalars()
+            .all()
+        )
+        all_active_channels = (
+            (await session.execute(select(Contest.channel_id).where(Contest.is_open.is_(True))))
+            .scalars()
+            .all()
+        )
+        channels = set(owner_channels) | set(all_active_channels)
+
     results: List[Tuple[int, str]] = []
     for ch_id in sorted(channels):
         if (ch_id in owner_channels) or (await _is_admin_in_channel(bot, ch_id, user_id)):
@@ -119,13 +128,8 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
         if not await _can_manage(cb.bot, cb.from_user.id, r):
             await cb.answer("❌ غير مصرح لك", show_alert=True)
             return
-        count = (
-            await session.execute(
-                select(func.count())
-                .select_from(ContestEntry)
-                .where(ContestEntry.contest_id == r.id)
-            )
-        ).scalar_one()
+        entry_repo = ContestEntryRepository(session)
+        count = await entry_repo.count_participants(r.id)
         text = (
             f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n"
             f"{StyledText(r.text_raw, r.text_style).render()}\n\n"
@@ -180,13 +184,8 @@ async def my_roulette(cb: CallbackQuery) -> None:
         if not await _can_manage(cb.bot, cb.from_user.id, r):
             await cb.answer("❌ غير مصرح لك", show_alert=True)
             return
-        count = (
-            await session.execute(
-                select(func.count())
-                .select_from(ContestEntry)
-                .where(ContestEntry.contest_id == r.id)
-            )
-        ).scalar_one()
+        entry_repo = ContestEntryRepository(session)
+        count = await entry_repo.count_participants(r.id)
         text = (
             f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n"
             f"{StyledText(r.text_raw, r.text_style).render()}\n\n"
@@ -243,13 +242,8 @@ async def renew_publication(cb: CallbackQuery) -> None:
 
         from ..routers.roulette import _build_channel_post_text
 
-        participants_count = (
-            await session.execute(
-                select(func.count())
-                .select_from(ContestEntry)
-                .where(ContestEntry.contest_id == c.id)
-            )
-        ).scalar_one()
+        entry_repo = ContestEntryRepository(session)
+        participants_count = await entry_repo.count_participants(c.id)
         text = _build_channel_post_text(c, participants_count)
 
         try:
