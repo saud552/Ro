@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -29,20 +29,19 @@ async def init_engine(database_url: str) -> None:
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     # SQLite doesn't support pool_size and max_overflow
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "future": True,
     }
     if "sqlite" not in database_url.lower():
-        kwargs.update({
-            "pool_pre_ping": True,
-            "pool_size": 20,
-            "max_overflow": 10,
-        })
+        kwargs.update(
+            {
+                "pool_pre_ping": True,
+                "pool_size": 20,
+                "max_overflow": 10,
+            }
+        )
 
-    _async_engine = create_async_engine(
-        database_url,
-        **kwargs
-    )
+    _async_engine = create_async_engine(database_url, **kwargs)
     _async_sessionmaker = async_sessionmaker(
         bind=_async_engine,
         expire_on_commit=False,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Generic, List, Optional, Sequence, Type, TypeVar
+from typing import Generic, Optional, Sequence, Type, TypeVar
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,12 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .models import (
     AppSetting,
     AuditLog,
-    BotChat,
     Contest,
     ContestEntry,
     FeatureAccess,
-    Purchase,
-    Question,
     User,
     Vote,
 )

@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import logging
 from contextlib import suppress
 
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
 from ..db import get_async_session
+from ..db.models import Notification
 from ..db.repositories import AppSettingRepository, UserRepository
 from ..keyboards.common import forced_sub_kb, main_menu_kb
 from ..services.subscription import SubscriptionService
-from ..db.models import User, Contest, Notification
 
 start_router = Router(name="start")
 
@@ -60,7 +59,7 @@ async def handle_start(message: Message, state: FSMContext) -> None:
                     with suppress(Exception):
                         await message.bot.send_message(
                             referred_by_id,
-                            f"🎊 مستخدم جديد انضم عبر رابطك! حصلت على {points_to_award} نقطة."
+                            f"🎊 مستخدم جديد انضم عبر رابطك! حصلت على {points_to_award} نقطة.",
                         )
 
         await user_repo.commit()
@@ -78,17 +77,19 @@ async def handle_start(message: Message, state: FSMContext) -> None:
         # 3. Handle specific deep links
         if deep_link:
             from aiogram.types import CallbackQuery as FakeCB
+
             if deep_link.startswith("reg-"):
                 # reg-contest_id
                 parts = deep_link.split("-")
                 if len(parts) == 2:
                     from .voting import start_registration
+
                     cb = FakeCB(
                         id="0",
                         from_user=message.from_user,
                         chat_instance="0",
                         message=message,
-                        data=f"reg_contest:{parts[1]}"
+                        data=f"reg_contest:{parts[1]}",
                     )
                     cb._bot = message.bot
                     await start_registration(cb, state)
@@ -99,12 +100,13 @@ async def handle_start(message: Message, state: FSMContext) -> None:
                 parts = deep_link.split("-")
                 if len(parts) == 3:
                     from .voting import handle_entry_view
+
                     cb = FakeCB(
                         id="0",
                         from_user=message.from_user,
                         chat_instance="0",
                         message=message,
-                        data=f"vote_sel:{parts[1]}:{parts[2]}"
+                        data=f"vote_sel:{parts[1]}:{parts[2]}",
                     )
                     cb._bot = message.bot
                     await handle_entry_view(cb, state)
@@ -115,33 +117,37 @@ async def handle_start(message: Message, state: FSMContext) -> None:
                 parts = deep_link.split("-")
                 if len(parts) == 2:
                     from .roulette import handle_join_request
+
                     cb = FakeCB(
                         id="0",
                         from_user=message.from_user,
                         chat_instance="0",
                         message=message,
-                        data=f"join:{parts[1]}"
+                        data=f"join:{parts[1]}",
                     )
                     cb._bot = message.bot
                     await handle_join_request(cb, state)
                     return
 
             elif deep_link.startswith("notify-"):
-                 # notify-contest_id
-                 parts = deep_link.split("-")
-                 if len(parts) == 2:
-                     contest_id = int(parts[1])
-                     stmt = select(Notification).where(
-                         (Notification.contest_id == contest_id) & (Notification.user_id == message.from_user.id)
-                     )
-                     existing = (await session.execute(stmt)).scalar_one_or_none()
-                     if not existing:
-                         session.add(Notification(contest_id=contest_id, user_id=message.from_user.id))
-                         await session.commit()
-                         await message.answer("✅ سيتم إخطارك إذا فزت في هذا السحب!")
-                     else:
-                         await message.answer("🔔 أنت مشترك بالفعل في إشعارات هذا السحب.")
-                     return
+                # notify-contest_id
+                parts = deep_link.split("-")
+                if len(parts) == 2:
+                    contest_id = int(parts[1])
+                    stmt = select(Notification).where(
+                        (Notification.contest_id == contest_id)
+                        & (Notification.user_id == message.from_user.id)
+                    )
+                    existing = (await session.execute(stmt)).scalar_one_or_none()
+                    if not existing:
+                        session.add(
+                            Notification(contest_id=contest_id, user_id=message.from_user.id)
+                        )
+                        await session.commit()
+                        await message.answer("✅ سيتم إخطارك إذا فزت في هذا السحب!")
+                    else:
+                        await message.answer("🔔 أنت مشترك بالفعل في إشعارات هذا السحب.")
+                    return
 
         # 4. Show Main Menu
         await message.answer(
@@ -174,4 +180,5 @@ async def cancel_flow(message: Message, state: FSMContext) -> None:
 async def open_my_draws(message: Message):
     """Legacy helper for tests."""
     from .my import my_entry
+
     await my_entry(message)

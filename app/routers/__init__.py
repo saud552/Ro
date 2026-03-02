@@ -4,13 +4,13 @@ from aiogram import Dispatcher
 
 from .admin import admin_router
 from .my import my_router
+from .quiz import quiz_router
 from .roulette import roulette_router
 from .sections import sections_router
 from .start import start_router
 from .system import system_router
 from .voting import voting_router
 from .yastahiq import yastahiq_router
-from .quiz import quiz_router
 
 
 # ملخص: تسجيل جميع الراوترات ضمن الـ Dispatcher.
