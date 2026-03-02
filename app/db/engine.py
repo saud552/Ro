@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -29,7 +29,7 @@ async def init_engine(database_url: str) -> None:
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     # SQLite doesn't support pool_size and max_overflow
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "future": True,
     }
     if "sqlite" not in database_url.lower():
