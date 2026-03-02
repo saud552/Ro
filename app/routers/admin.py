@@ -5,17 +5,17 @@ from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 from sqlalchemy import func, select
 
 from ..config import settings
-from ..db.repositories import AppSettingRepository
 from ..db import get_async_session
 from ..db.models import AppSetting, BotChat, ChannelLink, FeatureAccess, Purchase, User
+from ..db.repositories import AppSettingRepository
 
 admin_router = Router(name="admin")
 
@@ -132,7 +132,12 @@ async def admin_stats(cb: CallbackQuery) -> None:
         f"💎 الاشتراكات النشطة: <b>{active_paid}</b>\n"
         f"⭐️ إجمالي النجوم المحصلة: <b>{stars_total}</b>"
     )
-    await cb.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="رجوع", callback_data="admin_back")]]))
+    await cb.message.answer(
+        text,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="رجوع", callback_data="admin_back")]]
+        ),
+    )
     await cb.answer()
 
 
@@ -165,7 +170,7 @@ async def admin_broadcast_execute(message: Message, state: FSMContext) -> None:
         try:
             await message.copy_to(chat_id=uid)
             success += 1
-            await asyncio.sleep(0.05) # Rate limiting
+            await asyncio.sleep(0.05)  # Rate limiting
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             await message.copy_to(chat_id=uid)
@@ -173,7 +178,9 @@ async def admin_broadcast_execute(message: Message, state: FSMContext) -> None:
         except (TelegramForbiddenError, Exception):
             failed += 1
 
-    await message.answer(f"✅ اكتملت الإذاعة!\n\nنجاح: {success}\nفشل/حظر: {failed}", reply_markup=admin_menu_kb())
+    await message.answer(
+        f"✅ اكتملت الإذاعة!\n\nنجاح: {success}\nفشل/حظر: {failed}", reply_markup=admin_menu_kb()
+    )
     await state.clear()
 
 
@@ -273,7 +280,10 @@ async def admin_apply_bot_channel(message: Message, state: FSMContext) -> None:
             session.add(AppSetting(key="bot_base_channel", value=value))
         await session.commit()
     await state.clear()
-    await message.answer(f"✅ تم تعيين قناة البوت الأساسية إلى: {value}", reply_markup=admin_menu_kb())
+    await message.answer(
+        f"✅ تم تعيين قناة البوت الأساسية إلى: {value}", reply_markup=admin_menu_kb()
+    )
+
 
 @admin_router.callback_query(F.data == "admin_quiz_manage")
 async def admin_quiz_manage(cb: CallbackQuery) -> None:
@@ -290,14 +300,17 @@ async def admin_quiz_manage(cb: CallbackQuery) -> None:
     await cb.message.answer(text, parse_mode=ParseMode.HTML)
     await cb.answer()
 
+
 @admin_router.message(F.text.contains("|") & F.from_user.id.in_(settings.admin_ids))
 async def admin_bulk_add_questions(message: Message) -> None:
     async for session in get_async_session():
         from ..services.quiz import QuizService
+
         service = QuizService(session)
         # Assuming 0 as general bank for now
         count = await service.bulk_add_questions(0, message.text)
         await message.answer(f"✅ تم إضافة {count} سؤال لبنك الأسئلة بنجاح.")
+
 
 @admin_router.callback_query(F.data == "admin_referral_settings")
 async def admin_referral_settings(cb: CallbackQuery) -> None:
@@ -316,13 +329,16 @@ async def admin_referral_settings(cb: CallbackQuery) -> None:
         f"النقاط لكل إحالة: <b>{points}</b>\n\n"
         "اختر الإجراء المطلوب:"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="تغيير الحالة", callback_data="admin_toggle_ref")],
-        [InlineKeyboardButton(text="تعديل النقاط", callback_data="admin_edit_ref_points")],
-        [InlineKeyboardButton(text="رجوع", callback_data="admin_back")]
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="تغيير الحالة", callback_data="admin_toggle_ref")],
+            [InlineKeyboardButton(text="تعديل النقاط", callback_data="admin_edit_ref_points")],
+            [InlineKeyboardButton(text="رجوع", callback_data="admin_back")],
+        ]
+    )
     await cb.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
     await cb.answer()
+
 
 @admin_router.callback_query(F.data == "admin_toggle_ref")
 async def admin_toggle_ref(cb: CallbackQuery) -> None:
@@ -332,6 +348,7 @@ async def admin_toggle_ref(cb: CallbackQuery) -> None:
         new_val = "no" if current == "yes" else "yes"
         await repo.set_value("referral_enabled", new_val)
     await admin_referral_settings(cb)
+
 
 @admin_router.callback_query(F.data == "admin_share_contest")
 async def admin_share_contest(cb: CallbackQuery) -> None:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import ContestEntry, Question
@@ -53,7 +53,7 @@ class QuizService:
                 contest_id=contest_id,
                 question_text=text,
                 correct_answers_json=json.dumps(answers),
-                points=points
+                points=points,
             )
             self.session.add(q)
             count += 1
@@ -67,12 +67,15 @@ class QuizService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_next_question(self, contest_id: int, exclude_ids: List[int]) -> Optional[Question]:
+    async def get_next_question(
+        self, contest_id: int, exclude_ids: List[int]
+    ) -> Optional[Question]:
         """Fetch a question for the contest that hasn't been used yet in this session."""
-        stmt = select(Question).where(
-            Question.contest_id == contest_id,
-            ~Question.id.in_(exclude_ids)
-        ).limit(1)
+        stmt = (
+            select(Question)
+            .where(Question.contest_id == contest_id, ~Question.id.in_(exclude_ids))
+            .limit(1)
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -82,7 +85,9 @@ class QuizService:
             await self.redis.set(f"quiz:{contest_id}:active", question_id, ex=3600)
             await self.redis.delete(f"quiz:{contest_id}:solved")
 
-    async def submit_fastest_answer(self, contest_id: int, user_id: int, answer: str) -> Optional[Question]:
+    async def submit_fastest_answer(
+        self, contest_id: int, user_id: int, answer: str
+    ) -> Optional[Question]:
         """
         Verify if the user is the first to answer correctly.
         Returns the Question object if successful, None otherwise.

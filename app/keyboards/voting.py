@@ -38,28 +38,35 @@ def voting_main_kb(contest_id: int, bot_username: str = "bot") -> InlineKeyboard
     buttons = [
         [InlineKeyboardButton(text="📢 الاشتراك في المسابقة", url=reg_url)],
         [InlineKeyboardButton(text="🏆 المتصدرين", callback_data=f"leaderboard:{contest_id}")],
-        [InlineKeyboardButton(text="🔔 ذكّرني إذا فزت", url=notify_url)]
+        [InlineKeyboardButton(text="🔔 ذكّرني إذا فزت", url=notify_url)],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def contestant_vote_kb(contest_id: int, entry_id: int, votes: int, stars: int, mode: str, bot_username: str) -> InlineKeyboardMarkup:
+
+def contestant_vote_kb(
+    contest_id: int, entry_id: int, votes: int, stars: int, mode: str, bot_username: str
+) -> InlineKeyboardMarkup:
     """Keyboard for an individual contestant's post in the channel."""
     url = f"https://t.me/{bot_username}?start=vote-{contest_id}-{entry_id}"
     buttons = []
     if mode == "stars":
         buttons.append([InlineKeyboardButton(text=f"⭐️ ({stars})", url=url)])
     elif mode == "both":
-        buttons.append([
-            InlineKeyboardButton(text=f"❤️ ({votes})", url=url),
-            InlineKeyboardButton(text=f"⭐️ ({stars})", url=url)
-        ])
-    else: # normal
+        buttons.append(
+            [
+                InlineKeyboardButton(text=f"❤️ ({votes})", url=url),
+                InlineKeyboardButton(text=f"⭐️ ({stars})", url=url),
+            ]
+        )
+    else:  # normal
         buttons.append([InlineKeyboardButton(text=f"❤️ ({votes})", url=url)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def voting_selection_kb(contest_id: int, entry_id: int, mode: str = "normal") -> InlineKeyboardMarkup:
+def voting_selection_kb(
+    contest_id: int, entry_id: int, mode: str = "normal"
+) -> InlineKeyboardMarkup:
     """Keyboard shown when a user clicks on a contestant to vote for them."""
     buttons = []
     if mode in {"normal", "both"}:

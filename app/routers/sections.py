@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
-from datetime import datetime, timezone
 
 from ..db import get_async_session
-from ..db.models import User, FeatureAccess
+from ..db.models import FeatureAccess, User
 from ..keyboards.common import main_menu_kb
 
 sections_router = Router(name="sections")
@@ -114,7 +115,8 @@ async def section_referral(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    from ..utils.compat import safe_edit_text, safe_answer
+    from ..utils.compat import safe_answer, safe_edit_text
+
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await safe_answer(cb)
 
@@ -123,7 +125,8 @@ async def section_referral(cb: CallbackQuery) -> None:
 async def section_account(cb: CallbackQuery) -> None:
     async for session in get_async_session():
         stmt = select(FeatureAccess).where(
-            (FeatureAccess.user_id == cb.from_user.id) & (FeatureAccess.feature_key == "gate_channel")
+            (FeatureAccess.user_id == cb.from_user.id)
+            & (FeatureAccess.feature_key == "gate_channel")
         )
         access = (await session.execute(stmt)).scalar_one_or_none()
 
@@ -152,7 +155,8 @@ async def section_account(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    from ..utils.compat import safe_edit_text, safe_answer
+    from ..utils.compat import safe_answer, safe_edit_text
+
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await safe_answer(cb)
 
@@ -177,8 +181,16 @@ async def section_store(cb: CallbackQuery) -> None:
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=f"شراء مسابقة ({price_once}ن)", callback_data="buy_points_once")],
-            [InlineKeyboardButton(text=f"اشتراك شهري ({price_month}ن)", callback_data="buy_points_month")],
+            [
+                InlineKeyboardButton(
+                    text=f"شراء مسابقة ({price_once}ن)", callback_data="buy_points_once"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"اشتراك شهري ({price_month}ن)", callback_data="buy_points_month"
+                )
+            ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
@@ -193,6 +205,7 @@ async def back_to_main(cb: CallbackQuery) -> None:
         reply_markup=main_menu_kb(),
     )
     await cb.answer()
+
 
 @sections_router.callback_query(F.data.startswith("buy_points_"))
 async def buy_with_points(cb: CallbackQuery) -> None:
@@ -209,6 +222,7 @@ async def buy_with_points(cb: CallbackQuery) -> None:
 
         user.points -= cost
         from ..services.payments import grant_monthly, grant_one_time
+
         if mode == "once":
             await grant_one_time(cb.from_user.id, credits=1)
         else:

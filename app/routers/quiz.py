@@ -3,17 +3,18 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from aiogram import F, Router, Bot
-from aiogram.types import Message, CallbackQuery
+from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
 from ..db import get_async_session
-from ..services.quiz import QuizService
 from ..db.models import Contest, ContestType, Question
 from ..services.context import runtime
+from ..services.quiz import QuizService
 
 quiz_router = Router(name="quiz")
+
 
 @quiz_router.callback_query(F.data.startswith("quiz_stop:"))
 async def stop_quiz(cb: CallbackQuery) -> None:
@@ -26,6 +27,7 @@ async def stop_quiz(cb: CallbackQuery) -> None:
             await cb.answer("🛑 تم إيقاف الكويز مؤقتاً.", show_alert=True)
         else:
             await cb.answer("غير مصرح", show_alert=True)
+
 
 @quiz_router.callback_query(F.data.startswith("quiz_finish:"))
 async def finish_quiz(cb: CallbackQuery) -> None:
@@ -52,6 +54,7 @@ async def finish_quiz(cb: CallbackQuery) -> None:
         await session.commit()
     await cb.answer("✅ تم إعلان النتائج.")
 
+
 async def _run_quiz_session(bot: Bot, contest_id: int):
     """Background task to manage question posting for a quiz."""
     async for session in get_async_session():
@@ -66,7 +69,7 @@ async def _run_quiz_session(bot: Bot, contest_id: int):
             stmt = select(Question).where(Question.contest_id == 0).limit(c.questions_count or 5)
             questions = list((await session.execute(stmt)).scalars().all())
 
-        for i, q in enumerate(questions[:c.questions_count or 10]):
+        for i, q in enumerate(questions[: c.questions_count or 10]):
             # Re-fetch contest state each loop to check if still open
             c = await service.get_contest(contest_id)
             if not c or not c.is_open:
@@ -76,7 +79,7 @@ async def _run_quiz_session(bot: Bot, contest_id: int):
             await bot.send_message(
                 c.channel_id,
                 f"❓ <b>السؤال {i+1}:</b>\n\n{q.question_text}",
-                parse_mode=ParseMode.HTML
+                parse_mode=ParseMode.HTML,
             )
 
             # Wait for interval or until solved
@@ -87,13 +90,14 @@ async def _run_quiz_session(bot: Bot, contest_id: int):
                     break
                 await asyncio.sleep(1)
                 # Check if contest was closed manually
-                if i % 5 == 0: # infrequent db check
-                     pass
+                if i % 5 == 0:  # infrequent db check
+                    pass
 
-            await asyncio.sleep(2) # Brief pause before next
+            await asyncio.sleep(2)  # Brief pause before next
 
         # Finish automatically
         await announce_quiz_results(bot, contest_id)
+
 
 async def announce_quiz_results(bot: Bot, contest_id: int):
     async for session in get_async_session():
@@ -112,6 +116,7 @@ async def announce_quiz_results(bot: Bot, contest_id: int):
         c.closed_at = datetime.now(timezone.utc)
         await session.commit()
 
+
 @quiz_router.message(F.chat.type.in_({"group", "supergroup", "channel"}))
 async def handle_quiz_answer(message: Message) -> None:
     if not message.text:
@@ -124,7 +129,7 @@ async def handle_quiz_answer(message: Message) -> None:
         stmt = select(Contest).where(
             Contest.channel_id == message.chat.id,
             Contest.type == ContestType.QUIZ,
-            Contest.is_open.is_(True)
+            Contest.is_open.is_(True),
         )
         res = await session.execute(stmt)
         c = res.scalar_one_or_none()
@@ -136,7 +141,7 @@ async def handle_quiz_answer(message: Message) -> None:
                     await message.reply(
                         f"🎯 <b>إجابة صحيحة من <a href='tg://user?id={message.from_user.id}'>{message.from_user.full_name}</a>!</b>\n"
                         f"حصلت على {question.points} نقطة.",
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.HTML,
                     )
                 except Exception:
                     await message.answer(f"🎯 إجابة صحيحة من {message.from_user.full_name}!")

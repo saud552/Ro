@@ -21,7 +21,7 @@ class YastahiqService:
     async def get_active_contest(self, chat_id: int) -> Optional[Contest]:
         """Find the active 'Yastahiq' contest for this chat."""
         stmt = select(Contest).where(
-            Contest.channel_id == chat_id, # In group contests, channel_id stores the group ID
+            Contest.channel_id == chat_id,  # In group contests, channel_id stores the group ID
             Contest.type == ContestType.YASTAHIQ,
             Contest.is_open.is_(True),
         )
@@ -41,7 +41,7 @@ class YastahiqService:
         """Add a vote to a contestant identified by their entry name/code."""
         stmt = select(ContestEntry).where(
             ContestEntry.contest_id == contest_id,
-            (ContestEntry.entry_name == name) | (ContestEntry.unique_code == name)
+            (ContestEntry.entry_name == name) | (ContestEntry.unique_code == name),
         )
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()

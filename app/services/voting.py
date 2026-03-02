@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
-from sqlalchemy import desc, select, func
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Contest, ContestEntry, Vote
@@ -27,6 +27,7 @@ class VotingService:
     ) -> ContestEntry:
         """Register a user as a contestant in a voting contest."""
         import secrets
+
         unique_code = secrets.token_hex(4).upper()
 
         entry = ContestEntry(

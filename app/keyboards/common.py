@@ -100,7 +100,11 @@ def gate_add_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="👥 مجموعة شرط", callback_data="gate_type:group")],
             [InlineKeyboardButton(text="🗳 تصويت لمتسابق", callback_data="gate_type:vote")],
             [InlineKeyboardButton(text="🔥 تعليق يستحق", callback_data="gate_type:yastahiq")],
-            [InlineKeyboardButton(text="🎰 اشتراك في روليت آخر", callback_data="gate_type:contest")],
+            [
+                InlineKeyboardButton(
+                    text="🎰 اشتراك في روليت آخر", callback_data="gate_type:contest"
+                )
+            ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
         ]
     )
