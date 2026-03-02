@@ -43,7 +43,7 @@ async def test_pause_resume_and_join_flow():
     from app.db import get_async_session
     from app.db.engine import close_engine, init_engine
     from app.db.models import Contest, ContestType
-    from app.routers.roulette import join as join_handler
+    from app.routers.roulette import handle_join_request as join_handler
 
     # Pause/Resume handlers might need refactoring or aren't implemented yet for Contest
     # For now, let's just test join flow with Contest model
@@ -86,7 +86,12 @@ async def test_pause_resume_and_join_flow():
         r = (await session.execute(select(Contest).where(Contest.id == rid))).scalar_one()
         r.is_open = True
         await session.commit()
-    await join_handler(cb_join)
+    await join_handler(
+        cb_join,
+        SimpleNamespace(
+            set_state=lambda x: None, update_data=lambda **x: None, get_data=lambda: {}
+        ),
+    )
     # Verify at least one edit after join (count update)
     assert bot.edits, "Expected channel message edit after join"
 
