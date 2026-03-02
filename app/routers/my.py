@@ -126,7 +126,13 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n{StyledText(r.text_raw, r.text_style).render()}\n\n🔹 النوع: {r.type.value}\n🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n👥 عدد المشاركين: {count}"
+        text = (
+            f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n"
+            f"{StyledText(r.text_raw, r.text_style).render()}\n\n"
+            f"🔹 النوع: {r.type.value}\n"
+            f"🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n"
+            f"👥 عدد المشاركين: {count}"
+        )
         await cb.message.edit_text(
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
@@ -181,7 +187,13 @@ async def my_roulette(cb: CallbackQuery) -> None:
                 .where(ContestEntry.contest_id == r.id)
             )
         ).scalar_one()
-        text = f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n{StyledText(r.text_raw, r.text_style).render()}\n\n🔹 النوع: {r.type.value}\n🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n👥 عدد المشاركين: {count}"
+        text = (
+            f"⚙️ <b>إدارة الفعالية #{r.id}</b>\n\n"
+            f"{StyledText(r.text_raw, r.text_style).render()}\n\n"
+            f"🔹 النوع: {r.type.value}\n"
+            f"🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n"
+            f"👥 عدد المشاركين: {count}"
+        )
         await cb.message.edit_text(
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
@@ -257,7 +269,12 @@ async def renew_publication(cb: CallbackQuery) -> None:
 @my_router.callback_query(F.data.startswith("cancel_evt_ask:"))
 async def cancel_event_ask(cb: CallbackQuery) -> None:
     contest_id = int(cb.data.split(":")[1])
-    text = "⚠️ <b>تنبيه هام!</b>\n\nأنت على وشك حذف هذه الفعالية نهائياً. سيؤدي هذا إلى حذف جميع البيانات المرتبطة بها (المشاركين، الأصوات، الشروط) ولن تتمكن من استعادتها.\n\nهل أنت متأكد من قرار الإلغاء؟"
+    text = (
+        "⚠️ <b>تنبيه هام!</b>\n\n"
+        "أنت على وشك حذف هذه الفعالية نهائياً. سيؤدي هذا إلى حذف جميع البيانات المرتبطة بها "
+        "(المشاركين، الأصوات، الشروط) ولن تتمكن من استعادتها.\n\n"
+        "هل أنت متأكد من قرار الإلغاء؟"
+    )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [

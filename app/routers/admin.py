@@ -21,55 +21,45 @@ admin_router = Router(name="admin")
 
 
 class AdminStates(StatesGroup):
+    await_broadcast_message = State()
     await_price_value = State()
     await_bot_channel = State()
-    await_broadcast_message = State()
 
 
 def _is_admin(user_id: int) -> bool:
-    return user_id in set(settings.admin_ids)
-
-
-# ---- Keyboards ----
+    return user_id in settings.admin_ids
 
 
 def admin_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="📊 الاحصائيات", callback_data="admin_stats")],
-            [InlineKeyboardButton(text="📢 الاذاعة", callback_data="admin_broadcast")],
-            [InlineKeyboardButton(text="💰 تعيين قيمة الاشتراك", callback_data="admin_set_prices")],
-            [
-                InlineKeyboardButton(
-                    text="🔗 تعيين قناة البوت الأساسية", callback_data="admin_set_bot_channel"
-                )
-            ],
-        ]
-    )
+    buttons = [
+        [InlineKeyboardButton(text="📊 إحصائيات البوت", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="🚀 إذاعة للمستخدمين", callback_data="admin_broadcast")],
+        [InlineKeyboardButton(text="💰 إعدادات الأسعار", callback_data="admin_set_prices")],
+        [InlineKeyboardButton(text="📢 تعيين قناة البوت", callback_data="admin_set_bot_channel")],
+        [InlineKeyboardButton(text="🧠 إدارة الأسئلة", callback_data="admin_quiz_manage")],
+        [InlineKeyboardButton(text="👥 إعدادات الإحالة", callback_data="admin_referral_settings")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def prices_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="تعيين سعر المرة الواحدة", callback_data="price_once")],
-            [InlineKeyboardButton(text="تعيين سعر الاشتراك الشهري", callback_data="price_month")],
-            [InlineKeyboardButton(text="رجوع", callback_data="admin_back")],
-        ]
-    )
-
-
-# ---- Entry ----
+    buttons = [
+        [InlineKeyboardButton(text="تعديل سعر المرة الواحدة", callback_data="price_once")],
+        [InlineKeyboardButton(text="تعديل سعر الشهر", callback_data="price_month")],
+        [InlineKeyboardButton(text="🔙 رجوع", callback_data="admin_back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @admin_router.message(Command("admin"))
-async def admin_entry(message: Message, state: FSMContext) -> None:
+async def admin_menu(message: Message) -> None:
     if not _is_admin(message.from_user.id):
         return
-    await state.clear()
-    await message.answer("🛠 لوحة التحكم الخاصة بالمشرفين:", reply_markup=admin_menu_kb())
-
-
-# ---- Back ----
+    await message.answer(
+        "🛠 <b>لوحة تحكم المسؤول</b>\n\nاختر من الخيارات أدناه:",
+        reply_markup=admin_menu_kb(),
+        parse_mode=ParseMode.HTML,
+    )
 
 
 @admin_router.callback_query(F.data == "admin_back")
@@ -78,11 +68,12 @@ async def admin_back(cb: CallbackQuery, state: FSMContext) -> None:
         await cb.answer()
         return
     await state.clear()
-    await cb.message.edit_text("🛠 لوحة التحكم الخاصة بالمشرفين:", reply_markup=admin_menu_kb())
+    await cb.message.edit_text(
+        "🛠 <b>لوحة تحكم المسؤول</b>\n\nاختر من الخيارات أدناه:",
+        reply_markup=admin_menu_kb(),
+        parse_mode=ParseMode.HTML,
+    )
     await cb.answer()
-
-
-# ---- Stats ----
 
 
 @admin_router.callback_query(F.data == "admin_stats")
@@ -137,11 +128,9 @@ async def admin_stats(cb: CallbackQuery) -> None:
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="رجوع", callback_data="admin_back")]]
         ),
+        parse_mode=ParseMode.HTML,
     )
     await cb.answer()
-
-
-# ---- Broadcast ----
 
 
 @admin_router.callback_query(F.data == "admin_broadcast")
@@ -170,7 +159,7 @@ async def admin_broadcast_execute(message: Message, state: FSMContext) -> None:
         try:
             await message.copy_to(chat_id=uid)
             success += 1
-            await asyncio.sleep(0.05)  # Rate limiting
+            await asyncio.sleep(0.05)
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             await message.copy_to(chat_id=uid)
@@ -182,9 +171,6 @@ async def admin_broadcast_execute(message: Message, state: FSMContext) -> None:
         f"✅ اكتملت الإذاعة!\n\nنجاح: {success}\nفشل/حظر: {failed}", reply_markup=admin_menu_kb()
     )
     await state.clear()
-
-
-# ---- Prices ----
 
 
 @admin_router.callback_query(F.data == "admin_set_prices")
@@ -203,6 +189,7 @@ async def admin_set_prices(cb: CallbackQuery, state: FSMContext) -> None:
         f"الاشتراك الشهري: <b>{month}</b> نجمة\n\n"
         f"اختر ما تريد تعديله:",
         reply_markup=prices_kb(),
+        parse_mode=ParseMode.HTML,
     )
     await cb.answer()
 
@@ -238,9 +225,6 @@ async def admin_price_set_value(message: Message, state: FSMContext) -> None:
         await session.commit()
     await state.clear()
     await message.answer(f"✅ تم تحديث السعر إلى {value} نجمة.", reply_markup=admin_menu_kb())
-
-
-# ---- Set bot base channel ----
 
 
 @admin_router.callback_query(F.data == "admin_set_bot_channel")
@@ -307,7 +291,6 @@ async def admin_bulk_add_questions(message: Message) -> None:
         from ..services.quiz import QuizService
 
         service = QuizService(session)
-        # Assuming 0 as general bank for now
         count = await service.bulk_add_questions(0, message.text)
         await message.answer(f"✅ تم إضافة {count} سؤال لبنك الأسئلة بنجاح.")
 
@@ -352,5 +335,4 @@ async def admin_toggle_ref(cb: CallbackQuery) -> None:
 
 @admin_router.callback_query(F.data == "admin_share_contest")
 async def admin_share_contest(cb: CallbackQuery) -> None:
-    # Use inline query for sharing
     await cb.answer("يمكنك استخدام البحث المباشر لمشاركة مسابقاتك!", show_alert=True)

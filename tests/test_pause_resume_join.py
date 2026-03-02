@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from types import SimpleNamespace
 
 import pytest
@@ -56,7 +57,7 @@ async def test_pause_resume_and_join_flow():
         r = Contest(
             owner_id=10,
             channel_id=8888,
-            unique_code="pause_test",
+            unique_code=f"pause_test_{secrets.token_hex(4)}",
             type=ContestType.ROULETTE,
             text_raw="hello",
             text_style="plain",

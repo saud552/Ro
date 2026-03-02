@@ -77,7 +77,8 @@ async def handle_group_message(message: Message) -> None:
         if success:
             try:
                 await message.reply(
-                    f"✅ تم احتساب تصويتك لـ <b>{target_name}</b> بنجاح!", parse_mode=ParseMode.HTML
+                    f"✅ تم احتساب تصويتك لـ <b>{target_name}</b> بنجاح!",
+                    parse_mode=ParseMode.HTML,
                 )
             except Exception:
                 pass
