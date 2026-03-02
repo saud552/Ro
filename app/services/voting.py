@@ -5,7 +5,7 @@ from typing import Optional, Sequence
 from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Contest, ContestEntry, ContestType, Vote, VoteMode
+from ..db.models import Contest, ContestEntry, Vote
 from ..db.repositories import ContestEntryRepository, ContestRepository, VoteRepository
 
 

@@ -2,13 +2,11 @@ import asyncio
 import logging
 import secrets
 from contextlib import suppress
-from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -18,17 +16,14 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import delete, func, select
 
 from ..db import get_async_session
 from ..db.models import (
-    AppSetting,
-    BotChat,
     ChannelLink,
     Contest,
     ContestEntry,
     ContestType,
-    Notification,
     RouletteGate,
     VoteMode,
 )
@@ -41,14 +36,12 @@ from ..keyboards.common import (
     gate_pick_list_kb,
     gates_manage_kb,
 )
-from ..keyboards.my import manage_draw_kb
 from ..keyboards.settings import roulette_settings_kb
 from ..services.antibot import AntiBotService
 from ..services.context import runtime
 from ..services.formatting import StyledText, parse_style_from_text
-from ..services.payments import grant_monthly, grant_one_time, has_gate_access, log_purchase
+from ..services.payments import has_gate_access
 from ..services.ratelimit import get_rate_limiter
-from ..services.security import draw_unique
 from ..services.subscription import SubscriptionService
 from ..db.repositories import AppSettingRepository, ContestRepository, ContestEntryRepository
 from ..utils.compat import safe_answer
@@ -543,7 +536,7 @@ async def gate_type_select(cb: CallbackQuery, state: FSMContext) -> None:
                 await cb.answer("⚠️ ليس لديك قنوات مرتبطة لاختيارها.", show_alert=True)
                 return
             await state.update_data(sub_view="gate_pick")
-            items = [(l.channel_id, l.channel_title) for l in links]
+            items = [(link.channel_id, link.channel_title) for link in links]
             await cb.message.edit_text("📋 اختر من قنواتك المرتبطة:", reply_markup=gate_pick_list_kb(items))
 
     elif gtype == "vote" or gtype == "contest":
@@ -569,8 +562,8 @@ async def gate_type_select(cb: CallbackQuery, state: FSMContext) -> None:
                 return
 
             rows = []
-            for l in links:
-                rows.append([InlineKeyboardButton(text=l.channel_title or str(l.channel_id), callback_data=f"gate_sel_yastahiq:{l.channel_id}")])
+            for link in links:
+                rows.append([InlineKeyboardButton(text=link.channel_title or str(link.channel_id), callback_data=f"gate_sel_yastahiq:{link.channel_id}")])
             rows.append([InlineKeyboardButton(text="🔙 رجوع", callback_data="back")])
             await cb.message.edit_text("📋 اختر المجموعة التي يجب أن يمتلك فيها المستخدم نقاط تفاعل:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 

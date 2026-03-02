@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from ..db import get_async_session
 from ..db.models import User, FeatureAccess
-from ..keyboards.common import back_kb, main_menu_kb
+from ..keyboards.common import main_menu_kb
 
 sections_router = Router(name="sections")
 

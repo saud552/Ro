@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import List, Optional, Any
 
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Contest, ContestEntry, ContestType, Question
+from ..db.models import ContestEntry, Question
 from ..db.repositories import ContestEntryRepository
 
 

@@ -7,7 +7,7 @@ from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
-from sqlalchemy import func, select, delete
+from sqlalchemy import func, select
 
 from ..db import get_async_session
 from ..db.models import Contest, ContestEntry, ContestType, RouletteGate

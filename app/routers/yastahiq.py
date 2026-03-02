@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from aiogram import F, Router
 from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatType, ParseMode
@@ -15,7 +14,6 @@ yastahiq_router = Router(name="yastahiq")
 async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
     """Show copyable text for Yastahiq contestants."""
     parts = cb.data.split(":")
-    contest_id = int(parts[1])
     entry_id = int(parts[2])
 
     async for session in get_async_session():

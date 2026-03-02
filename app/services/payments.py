@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from datetime import datetime, timezone
 
 from aiogram import Bot
 from aiogram.types import LabeledPrice

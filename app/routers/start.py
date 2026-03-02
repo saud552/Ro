@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import logging
 from contextlib import suppress
 
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
 from ..db import get_async_session
 from ..db.repositories import AppSettingRepository, UserRepository
 from ..keyboards.common import forced_sub_kb, main_menu_kb
 from ..services.subscription import SubscriptionService
-from ..db.models import User, Contest, Notification
+from ..db.models import Notification
 
 start_router = Router(name="start")
 

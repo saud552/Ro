@@ -3,11 +3,9 @@ from __future__ import annotations
 import asyncio
 import secrets
 from datetime import datetime, timezone
-from typing import Optional
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -21,11 +19,10 @@ from aiogram.types import (
 from sqlalchemy import select
 
 from ..db import get_async_session
-from ..db.models import ContestEntry, ContestType, VoteMode, Vote, Contest, RouletteGate
-from ..db.repositories import AppSettingRepository, ContestEntryRepository
+from ..db.models import ContestEntry, ContestType, Contest, RouletteGate
+from ..db.repositories import AppSettingRepository
 from ..keyboards.voting import (
     star_amounts_kb,
-    voting_main_kb,
     voting_selection_kb,
     contestant_vote_kb,
 )

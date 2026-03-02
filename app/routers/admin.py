@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -12,6 +13,7 @@ from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 from sqlalchemy import func, select
 
 from ..config import settings
+from ..db.repositories import AppSettingRepository
 from ..db import get_async_session
 from ..db.models import AppSetting, BotChat, ChannelLink, FeatureAccess, Purchase, User
 

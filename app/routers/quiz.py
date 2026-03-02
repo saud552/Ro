@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 
 from aiogram import F, Router, Bot
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ParseMode
 from sqlalchemy import select
 
@@ -42,7 +39,7 @@ async def finish_quiz(cb: CallbackQuery) -> None:
 
         winners = await service.get_leaderboard(contest_id, limit=c.winners_count)
 
-        text = f"🏁 <b>انتهت المسابقة الثقافية!</b>\n\n<b>الفائزون:</b>\n"
+        text = "🏁 <b>انتهت المسابقة الثقافية!</b>\n\n<b>الفائزون:</b>\n"
         if not winners:
             text += "لا يوجد فائزون في هذه المسابقة."
         else:
@@ -76,7 +73,7 @@ async def _run_quiz_session(bot: Bot, contest_id: int):
                 break
 
             await service.set_active_question(c.id, q.id)
-            msg = await bot.send_message(
+            await bot.send_message(
                 c.channel_id,
                 f"❓ <b>السؤال {i+1}:</b>\n\n{q.question_text}",
                 parse_mode=ParseMode.HTML
