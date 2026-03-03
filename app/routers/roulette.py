@@ -544,14 +544,24 @@ async def gate_event_selection(cb: CallbackQuery, state: FSMContext) -> None:
 async def collect_gate_target_code(message: Message, state: FSMContext) -> None:
     code = (message.text or "").strip().upper()
     data = await state.get_data()
-    cid = data.get("gate_target_id")
-    gates = list(data.get("gate_channels", []))
 
-    gates.append({"type": "vote", "id": cid, "code": code, "title": f"تصويت لـ {code}"})
-    await state.update_data(gate_channels=gates)
+    # Validation of the code - search for it in the DB
+    async for session in get_async_session():
+        from ..db.models import ContestEntry
+        from sqlalchemy import select
+        stmt = select(ContestEntry.id, ContestEntry.contest_id).where(ContestEntry.unique_code == code)
+        res = await session.execute(stmt)
+        row = res.first()
+        if not row:
+            await message.answer("❌ عذراً، لم يتم العثور على متسابق بهذا الرمز. يرجى التأكد من الرمز والمحاولة مجدداً.")
+            return
+
+        cid = row[1]
+        gates = list(data.get("gate_channels", []))
+        gates.append({"type": "vote", "id": cid, "code": code, "title": f"تصويت لـ {code}"})
+        await state.update_data(gate_channels=gates)
 
     from ..keyboards.common import gates_manage_kb
-
     await message.answer("🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
 
 
@@ -884,8 +894,12 @@ async def handle_join_request(cb: CallbackQuery, state: FSMContext) -> None:
             return
 
         # Finalize join
+        prefix = "R"
+        if c.type == ContestType.VOTE: prefix = "V"
+        elif c.type == ContestType.YASTAHIQ: prefix = "Y"
+        elif c.type == ContestType.QUIZ: prefix = "Q"
 
-        code = secrets.token_hex(4).upper()
+        code = f"{prefix}-{secrets.token_hex(4).upper()}"
         entry = ContestEntry(
             contest_id=contest_id,
             user_id=cb.from_user.id,
@@ -910,8 +924,14 @@ async def handle_antibot_ans(cb: CallbackQuery, state: FSMContext) -> None:
         return
 
     async for session in get_async_session():
+        c = await session.get(Contest, contest_id)
+        prefix = "R"
+        if c:
+            if c.type == ContestType.VOTE: prefix = "V"
+            elif c.type == ContestType.YASTAHIQ: prefix = "Y"
+            elif c.type == ContestType.QUIZ: prefix = "Q"
 
-        code = secrets.token_hex(4).upper()
+        code = f"{prefix}-{secrets.token_hex(4).upper()}"
         entry = ContestEntry(
             contest_id=contest_id,
             user_id=cb.from_user.id,

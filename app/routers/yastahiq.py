@@ -29,7 +29,8 @@ async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
             f"🔥 <b>دعم المتسابق: {entry.entry_name}</b>\n\n"
             f"قم بنسخ أحد النصوص التالية وإرسالها في المجموعة المحددة:\n\n"
             f"1️⃣ <code>يستحق</code>\n"
-            f"2️⃣ <code>يستحق {entry.entry_name}</code>\n\n"
+            f"2️⃣ <code>يستحق {entry.entry_name}</code>\n"
+            f"3️⃣ <code>يستحق {entry.unique_code}</code>\n\n"
             "📌 عند إرسال الكلمة، سيتم احتساب تصويتك تلقائياً."
         )
         if cb.id == "0":
@@ -63,7 +64,7 @@ async def handle_group_message(message: Message) -> None:
         # 1. Try by reply
         if message.reply_to_message:
             target_uid = message.reply_to_message.from_user.id
-            success = await service.add_vote_by_reply(contest.id, target_uid)
+            success = await service.add_vote_by_reply(contest.id, target_uid, message.from_user.id)
             target_name = message.reply_to_message.from_user.full_name
 
         # 2. Try by name/code if not success
@@ -71,7 +72,7 @@ async def handle_group_message(message: Message) -> None:
             # Check if text is exactly keyword + name/code
             target = text.replace(keyword, "", 1).strip()
             if target:
-                success = await service.add_vote_by_name(contest.id, target)
+                success = await service.add_vote_by_name(contest.id, target, message.from_user.id)
                 target_name = target
 
         if success:

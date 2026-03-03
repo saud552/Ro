@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Contest, ContestEntry, ContestType
+from ..db.models import Contest, ContestEntry, ContestType, Vote
 from ..db.repositories import ContestEntryRepository
 
 
@@ -21,23 +21,35 @@ class YastahiqService:
     async def get_active_contest(self, chat_id: int) -> Optional[Contest]:
         """Find the active 'Yastahiq' contest for this chat."""
         stmt = select(Contest).where(
-            Contest.channel_id == chat_id,  # In group contests, channel_id stores the group ID
+            Contest.channel_id == chat_id,
             Contest.type == ContestType.YASTAHIQ,
             Contest.is_open.is_(True),
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def add_vote_by_reply(self, contest_id: int, target_user_id: int) -> bool:
+    async def add_vote_by_reply(self, contest_id: int, target_user_id: int, voter_id: int) -> bool:
         """Add a vote to a contestant identified by their user ID (via reply)."""
         entry = await self.entry_repo.get_entry(contest_id, target_user_id)
         if entry:
+            # Check for existing vote to prevent duplicates if necessary (based on settings)
+            # For Yastahiq, usually multiple comments are allowed, but for Gates we just need 1 record.
+
+            # Record the vote properly
+            vote = Vote(
+                contest_id=contest_id,
+                entry_id=entry.id,
+                voter_id=voter_id,
+                is_stars=False
+            )
+            self.session.add(vote)
+
             entry.votes_count += 1
             await self.session.commit()
             return True
         return False
 
-    async def add_vote_by_name(self, contest_id: int, name: str) -> bool:
+    async def add_vote_by_name(self, contest_id: int, name: str, voter_id: int) -> bool:
         """Add a vote to a contestant identified by their entry name/code."""
         stmt = select(ContestEntry).where(
             ContestEntry.contest_id == contest_id,
@@ -46,6 +58,14 @@ class YastahiqService:
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()
         if entry:
+            vote = Vote(
+                contest_id=contest_id,
+                entry_id=entry.id,
+                voter_id=voter_id,
+                is_stars=False
+            )
+            self.session.add(vote)
+
             entry.votes_count += 1
             await self.session.commit()
             return True

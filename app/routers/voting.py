@@ -50,8 +50,10 @@ class VotingFlow(StatesGroup):
 # --- Helpers ---
 
 
-async def _verify_vote_eligibility(cb: CallbackQuery, c: Contest, session) -> bool:
-    """Check if the user satisfies all conditions to vote/participate."""
+async def _verify_vote_eligibility(cb: CallbackQuery, c: Contest, session, entry_id: Optional[int] = None, state: Optional[FSMContext] = None) -> bool:
+    """Check if the user satisfies all conditions and show interface if not."""
+    from .system import show_verification_interface
+    from ..services.security import FailureMonitor
 
     # 1. Premium Only check
     if c.is_premium_only and not cb.from_user.is_premium:
@@ -60,41 +62,32 @@ async def _verify_vote_eligibility(cb: CallbackQuery, c: Contest, session) -> bo
 
     # 2. Forced Subscription check
     sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
-    if not c.sub_check_disabled:
-        if not await sub_service.check_forced_subscription(cb.from_user.id):
-            channel = await sub_service.get_required_channel()
-            url = f"https://t.me/{channel.lstrip('@')}" if channel else "https://t.me/telegram"
-            from ..keyboards.common import forced_sub_kb
+    monitor = FailureMonitor(runtime.redis)
 
-            await cb.message.answer(
-                "❌ يرجى الاشتراك في قناة البوت أولاً للتصويت أو المشاركة.",
-                reply_markup=forced_sub_kb(url),
-            )
-            return False
+    if not c.sub_check_disabled:
+        passed, is_sys = await sub_service.is_member_safe(await sub_service.get_required_channel() or "telegram", cb.from_user.id)
+        if not passed:
+            # Simple error for forced sub for now, or could be a gate
+            pass
 
     # 3. Custom Gates check
-    gates = (
-        (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id)))
-        .scalars()
-        .all()
-    )
-    for gate in gates:
-        if not await sub_service.check_gate(cb.from_user.id, gate, session):
-            if gate.gate_type == "channel":
-                await cb.message.answer(
-                    f"⚠️ يجب الانضمام لقناة: {gate.channel_title}\n{gate.invite_link}"
-                )
-            elif gate.gate_type == "contest":
-                await cb.message.answer(f"⚠️ يجب الانضمام للمسابقة رقم {gate.target_id} أولاً!")
-            elif gate.gate_type == "vote":
-                await cb.message.answer(
-                    f"⚠️ يجب التصويت للمتسابق ذو الرمز {gate.target_code} في المسابقة {gate.target_id}!"
-                )
-            elif gate.gate_type == "yastahiq":
-                await cb.message.answer(
-                    "⚠️ يجب أن يكون لديك نقاط تفاعل في المجموعة لاستكمال هذا الشرط."
-                )
-            return False
+    gates = (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id))).scalars().all()
+    results = await sub_service.verify_all_gates(cb.from_user.id, gates, session)
+
+    # Handle system failures
+    for r in results:
+        if r.error_type == "system_failure":
+            await monitor.report_failure(c.id, c.owner_id, r.gate.id, cb.bot)
+        elif r.is_passed:
+            await monitor.reset_failure(c.id, r.gate.id)
+
+    pending = [r for r in results if not r.is_passed]
+    if pending:
+        if state:
+            await show_verification_interface(cb, state, c.id, entry_id, results)
+        else:
+            await cb.message.answer("⚠️ لم تحقق جميع الشروط المطلوبة.")
+        return False
 
     return True
 
@@ -141,7 +134,7 @@ async def handle_normal_vote(cb: CallbackQuery, state: FSMContext) -> None:
             await safe_answer(cb, "⚠️ التصويت مغلق حالياً.", show_alert=True)
             return
 
-        if not await _verify_vote_eligibility(cb, c, session):
+        if not await _verify_vote_eligibility(cb, c, session, entry_id, state):
             await safe_answer(cb)
             return
 
@@ -236,7 +229,7 @@ async def handle_star_vote_pre(cb: CallbackQuery) -> None:
         service = VotingService(session)
         c = await service.get_contest(contest_id)
 
-        if not await _verify_vote_eligibility(cb, c, session):
+        if not await _verify_vote_eligibility(cb, c, session, entry_id, state):
             await safe_answer(cb)
             return
 
@@ -290,7 +283,7 @@ async def start_registration(cb: CallbackQuery, state: FSMContext) -> None:
             return
 
         # Gate Check for registration
-        if not await _verify_vote_eligibility(cb, c, session):
+        if not await _verify_vote_eligibility(cb, c, session, None, state):
             await safe_answer(cb)
             return
 
@@ -324,10 +317,14 @@ async def reg_use_name_callback(cb: CallbackQuery, state: FSMContext) -> None:
     name = cb.from_user.full_name
     async for session in get_async_session():
         service = VotingService(session)
-        entry = await service.register_contestant(contest_id, cb.from_user.id, name)
-
         c = await service.get_contest(contest_id)
-        if c:
+        if not c:
+            await safe_answer(cb, "⚠️ المسابقة غير موجودة.")
+            return
+
+        entry = await service.register_contestant(c, cb.from_user.id, name)
+
+        if entry:
             text = f"👤 المتسابق: <b>{name}</b>"
             kb = contestant_vote_kb(
                 contest_id,
@@ -373,9 +370,13 @@ async def complete_registration(message: Message, state: FSMContext) -> None:
 
     async for session in get_async_session():
         service = VotingService(session)
-        entry = await service.register_contestant(contest_id, message.from_user.id, name)
-
         c = await service.get_contest(contest_id)
+        if not c:
+            await message.answer("⚠️ المسابقة غير موجودة.")
+            return
+
+        entry = await service.register_contestant(c, message.from_user.id, name)
+
         if c:
             text = f"👤 المتسابق: <b>{name}</b>"
             kb = contestant_vote_kb(

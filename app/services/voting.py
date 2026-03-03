@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import secrets
 from typing import Optional, Sequence
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Contest, ContestEntry, Vote
+from ..db.models import Contest, ContestEntry, ContestType, Vote
 from ..db.repositories import ContestEntryRepository, ContestRepository, VoteRepository
 
 
@@ -23,15 +24,23 @@ class VotingService:
         return await self.contest_repo.get_by_id(contest_id)
 
     async def register_contestant(
-        self, contest_id: int, user_id: int, entry_name: str
+        self, contest: Contest, user_id: int, entry_name: str
     ) -> ContestEntry:
         """Register a user as a contestant in a voting contest."""
-        import secrets
+        prefix = "V"
+        if contest.type == ContestType.VOTE:
+            prefix = "V"
+        elif contest.type == ContestType.YASTAHIQ:
+            prefix = "Y"
+        elif contest.type == ContestType.ROULETTE:
+            prefix = "R"
+        elif contest.type == ContestType.QUIZ:
+            prefix = "Q"
 
-        unique_code = secrets.token_hex(4).upper()
+        unique_code = f"{prefix}-{secrets.token_hex(4).upper()}"
 
         entry = ContestEntry(
-            contest_id=contest_id, user_id=user_id, entry_name=entry_name, unique_code=unique_code
+            contest_id=contest.id, user_id=user_id, entry_name=entry_name, unique_code=unique_code
         )
         self.session.add(entry)
         await self.session.flush()

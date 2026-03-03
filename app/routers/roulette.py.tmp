@@ -1,0 +1,52 @@
+<<<<<<< SEARCH
+        # Finalize join
+
+        code = f"R-{secrets.token_hex(4).upper()}"
+        entry = ContestEntry(
+            contest_id=contest_id,
+            user_id=cb.from_user.id,
+            entry_name=cb.from_user.full_name,
+            unique_code=code,
+        )
+=======
+        # Finalize join
+        prefix = "R"
+        if c.type == ContestType.VOTE: prefix = "V"
+        elif c.type == ContestType.YASTAHIQ: prefix = "Y"
+        elif c.type == ContestType.QUIZ: prefix = "Q"
+
+        code = f"{prefix}-{secrets.token_hex(4).upper()}"
+        entry = ContestEntry(
+            contest_id=contest_id,
+            user_id=cb.from_user.id,
+            entry_name=cb.from_user.full_name,
+            unique_code=code,
+        )
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+    async for session in get_async_session():
+
+        code = f"R-{secrets.token_hex(4).upper()}"
+        entry = ContestEntry(
+            contest_id=contest_id,
+            user_id=cb.from_user.id,
+            entry_name=cb.from_user.full_name,
+            unique_code=code,
+        )
+=======
+    async for session in get_async_session():
+        c = await session.get(Contest, contest_id)
+        prefix = "R"
+        if c:
+            if c.type == ContestType.VOTE: prefix = "V"
+            elif c.type == ContestType.YASTAHIQ: prefix = "Y"
+            elif c.type == ContestType.QUIZ: prefix = "Q"
+
+        code = f"{prefix}-{secrets.token_hex(4).upper()}"
+        entry = ContestEntry(
+            contest_id=contest_id,
+            user_id=cb.from_user.id,
+            entry_name=cb.from_user.full_name,
+            unique_code=code,
+        )
+>>>>>>> REPLACE
