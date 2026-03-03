@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 from aiogram import F, Router
-from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatType, ParseMode
+from aiogram.types import CallbackQuery, Message
 
 from ..db import get_async_session
 from ..services.yastahiq import YastahiqService
@@ -11,15 +10,16 @@ from ..utils.compat import safe_answer
 
 yastahiq_router = Router(name="yastahiq")
 
+
 @yastahiq_router.callback_query(F.data.startswith("yastahiq_interact:"))
 async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
     """Show copyable text for Yastahiq contestants."""
     parts = cb.data.split(":")
-    contest_id = int(parts[1])
     entry_id = int(parts[2])
 
     async for session in get_async_session():
         from ..db.models import ContestEntry
+
         entry = await session.get(ContestEntry, entry_id)
         if not entry:
             await safe_answer(cb, "⚠️ المتسابق غير موجود.")
@@ -38,6 +38,7 @@ async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
             await cb.message.edit_text(text, parse_mode=ParseMode.HTML)
 
     await safe_answer(cb)
+
 
 @yastahiq_router.message(F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
 async def handle_group_message(message: Message) -> None:
@@ -77,7 +78,7 @@ async def handle_group_message(message: Message) -> None:
             try:
                 await message.reply(
                     f"✅ تم احتساب تصويتك لـ <b>{target_name}</b> بنجاح!",
-                    parse_mode=ParseMode.HTML
+                    parse_mode=ParseMode.HTML,
                 )
             except Exception:
                 pass

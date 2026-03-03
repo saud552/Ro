@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
-from datetime import datetime, timezone
 
 from ..db import get_async_session
-from ..db.models import User, FeatureAccess
-from ..keyboards.common import back_kb, main_menu_kb
+from ..db.models import FeatureAccess, User
+from ..keyboards.common import main_menu_kb
+from ..utils.compat import safe_answer, safe_edit_text
 
 sections_router = Router(name="sections")
 
@@ -29,7 +31,7 @@ async def section_roulette(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -50,7 +52,7 @@ async def section_vote(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -67,7 +69,7 @@ async def section_yastahiq(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -86,8 +88,25 @@ async def section_quiz(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
+
+
+@sections_router.callback_query(F.data == "section_channels")
+async def section_channels(cb: CallbackQuery) -> None:
+    text = (
+        "📢 <b>إدارة القنوات والمجموعات</b>\n\n"
+        "يمكنك هنا ربط قنواتك لتتمكن من استخدامها في شروط الانضمام للمسابقات."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 ربط قناة جديدة", callback_data="link_channel")],
+            [InlineKeyboardButton(text="✂️ فك ارتباط قناة", callback_data="unlink_channel")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
+    await safe_answer(cb)
 
 
 @sections_router.callback_query(F.data == "section_referral")
@@ -109,12 +128,9 @@ async def section_referral(cb: CallbackQuery) -> None:
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 ربط قناة/مجموعات", callback_data="link_channel")],
-            [InlineKeyboardButton(text="✂️ فك ارتباط", callback_data="unlink_channel")],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    from ..utils.compat import safe_edit_text, safe_answer
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await safe_answer(cb)
 
@@ -123,7 +139,8 @@ async def section_referral(cb: CallbackQuery) -> None:
 async def section_account(cb: CallbackQuery) -> None:
     async for session in get_async_session():
         stmt = select(FeatureAccess).where(
-            (FeatureAccess.user_id == cb.from_user.id) & (FeatureAccess.feature_key == "gate_channel")
+            (FeatureAccess.user_id == cb.from_user.id)
+            & (FeatureAccess.feature_key == "gate_channel")
         )
         access = (await session.execute(stmt)).scalar_one_or_none()
 
@@ -147,12 +164,9 @@ async def section_account(cb: CallbackQuery) -> None:
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 ربط قناة/مجموعات", callback_data="link_channel")],
-            [InlineKeyboardButton(text="✂️ فك ارتباط", callback_data="unlink_channel")],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    from ..utils.compat import safe_edit_text, safe_answer
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await safe_answer(cb)
 
@@ -177,22 +191,31 @@ async def section_store(cb: CallbackQuery) -> None:
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=f"شراء مسابقة ({price_once}ن)", callback_data="buy_points_once")],
-            [InlineKeyboardButton(text=f"اشتراك شهري ({price_month}ن)", callback_data="buy_points_month")],
+            [
+                InlineKeyboardButton(
+                    text=f"شراء مسابقة ({price_once}ن)", callback_data="buy_points_once"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"اشتراك شهري ({price_month}ن)", callback_data="buy_points_month"
+                )
+            ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
 @sections_router.callback_query(F.data == "main_menu")
 async def back_to_main(cb: CallbackQuery) -> None:
-    await cb.message.edit_text(
+    await safe_edit_text(cb.message,
         "يرجى اختيار القسم المطلوب من القائمة أدناه:",
         reply_markup=main_menu_kb(),
     )
     await cb.answer()
+
 
 @sections_router.callback_query(F.data.startswith("buy_points_"))
 async def buy_with_points(cb: CallbackQuery) -> None:
@@ -209,6 +232,7 @@ async def buy_with_points(cb: CallbackQuery) -> None:
 
         user.points -= cost
         from ..services.payments import grant_monthly, grant_one_time
+
         if mode == "once":
             await grant_one_time(cb.from_user.id, credits=1)
         else:

@@ -58,4 +58,4 @@ class Settings(BaseSettings):
         return base + self.webhook_path(token)
 
 
-settings = Settings()  # type: ignore[call-arg]
+settings = Settings()

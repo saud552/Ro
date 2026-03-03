@@ -6,13 +6,18 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
-    """Arabic Main Menu with all 8 requested sections."""
+    """Arabic Main Menu with all requested sections."""
     buttons = [
         [InlineKeyboardButton(text="🎰 قسم الروليت", callback_data="section_roulette")],
         [InlineKeyboardButton(text="🗳️ قسم مسابقات التصويت", callback_data="section_vote")],
         [InlineKeyboardButton(text="🏆 مسابقة 'يستحق'", callback_data="section_yastahiq")],
         [InlineKeyboardButton(text="❓ قسم مسابقة الأسئلة", callback_data="section_quiz")],
         [InlineKeyboardButton(text="⚙️ إدارة مسابقاتي", callback_data="my_draws")],
+        [
+            InlineKeyboardButton(
+                text="📢 إدارة القنوات والمجموعات", callback_data="section_channels"
+            )
+        ],
         [InlineKeyboardButton(text="💎 متجر النقاط واشتراكاتي", callback_data="section_store")],
         [InlineKeyboardButton(text="📊 حسابي", callback_data="section_account")],
         [InlineKeyboardButton(text="💰 كسب النقاط", callback_data="section_referral")],
@@ -100,7 +105,11 @@ def gate_add_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="👥 مجموعة شرط", callback_data="gate_type:group")],
             [InlineKeyboardButton(text="🗳 تصويت لمتسابق", callback_data="gate_type:vote")],
             [InlineKeyboardButton(text="🔥 تعليق يستحق", callback_data="gate_type:yastahiq")],
-            [InlineKeyboardButton(text="🎰 اشتراك في روليت آخر", callback_data="gate_type:contest")],
+            [
+                InlineKeyboardButton(
+                    text="🎰 اشتراك في روليت آخر", callback_data="gate_type:contest"
+                )
+            ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
         ]
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from types import SimpleNamespace
 
 import pytest
@@ -28,7 +29,6 @@ class _Bot:
                 "chat_id": chat_id,
                 "message_id": message_id,
                 "text": text,
-                "parse_mode": getattr(parse_mode, "value", str(parse_mode)),
             }
         )
 
@@ -37,31 +37,28 @@ class _Bot:
 
 
 @pytest.mark.asyncio
-async def test_pause_resume_and_join_flow():
+async def test_join_flow():
     from sqlalchemy import select
 
     from app.db import get_async_session
     from app.db.engine import close_engine, init_engine
     from app.db.models import Contest, ContestType
-    from app.routers.roulette import join as join_handler
+    from app.routers.roulette import handle_join_request as join_handler
 
-    # Pause/Resume handlers might need refactoring or aren't implemented yet for Contest
-    # For now, let's just test join flow with Contest model
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_join.sqlite3"
+    await init_engine(os.environ["DATABASE_URL"])
 
-    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_pause_resume.sqlite3"
-    await init_engine(os.environ["DATABASE_URL"])  # auto create for sqlite
-
-    # Create contest open with zero participants
     async for session in get_async_session():
         r = Contest(
             owner_id=10,
             channel_id=8888,
-            unique_code="pause_test",
+            unique_code=f"join_test_{secrets.token_hex(4)}",
             type=ContestType.ROULETTE,
             text_raw="hello",
             text_style="plain",
             winners_count=1,
             is_open=True,
+            anti_bot_enabled=False,
         )
         session.add(r)
         await session.flush()
@@ -69,25 +66,34 @@ async def test_pause_resume_and_join_flow():
         await session.commit()
 
     bot = _Bot()
-    # Make owner admin in the channel for permission checks
-    bot.set_member(8888, 10, "administrator")
 
     async def _ans(*args, **kwargs):
         return None
 
-    # Join path: user 99 joins -> should increment
-    # Prepare CB for join with is_open True and subscription OK
-    cb_join = SimpleNamespace(bot=bot, from_user=SimpleNamespace(id=99), data=f"join:{rid}")
+    cb_join = SimpleNamespace(
+        bot=bot,
+        from_user=SimpleNamespace(id=99, full_name="Tester"),
+        data=f"join:{rid}",
+        id="123",
+        message=SimpleNamespace(answer=_ans, edit_text=_ans),
+    )
     cb_join.answer = _ans
-    # Ensure user is member of channel
     bot.set_member(8888, 99, "member")
-    # Ensure contest is open
+
+    async def _async_none(*args, **kwargs):
+        return None
+
+    state = SimpleNamespace(set_state=_async_none, update_data=_async_none, get_data=lambda: {})
+
+    await join_handler(cb_join, state)
+
     async for session in get_async_session():
-        r = (await session.execute(select(Contest).where(Contest.id == rid))).scalar_one()
-        r.is_open = True
-        await session.commit()
-    await join_handler(cb_join)
-    # Verify at least one edit after join (count update)
-    assert bot.edits, "Expected channel message edit after join"
+        from app.db.models import ContestEntry
+
+        stmt = select(ContestEntry).where(
+            ContestEntry.contest_id == rid, ContestEntry.user_id == 99
+        )
+        entry = (await session.execute(stmt)).scalar_one_or_none()
+        assert entry is not None
 
     await close_engine()

@@ -2,20 +2,18 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Generic, List, Optional, Sequence, Type, TypeVar
+from typing import Generic, Optional, Sequence, Type, TypeVar
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
     AppSetting,
     AuditLog,
-    BotChat,
     Contest,
     ContestEntry,
     FeatureAccess,
-    Purchase,
-    Question,
     User,
     Vote,
 )
@@ -68,7 +66,18 @@ class UserRepository(BaseRepository[User]):
             return user
 
         user = User(id=user_id, username=username)
-        await self.add(user)
+        self.session.add(user)
+        try:
+            await self.session.flush()
+        except IntegrityError:
+            await self.session.rollback()
+            # Try fetching again as it might have been created by a concurrent request
+            user = await self.get_by_id(user_id)
+            if user:
+                if username and user.username != username:
+                    user.username = username
+                return user
+            raise
         return user
 
 

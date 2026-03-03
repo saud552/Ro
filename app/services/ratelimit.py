@@ -6,7 +6,7 @@ from typing import Dict, List
 try:
     from redis.asyncio import Redis as AsyncRedis
 except Exception:
-    AsyncRedis = None  # type: ignore
+    AsyncRedis = None
 
 
 class InMemoryRateLimiter:

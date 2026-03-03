@@ -17,7 +17,7 @@ if _il.find_spec("greenlet") is None:  # pragma: no cover
 from app.db import get_async_session
 from app.db.engine import close_engine, init_engine
 from app.db.models import Contest, ContestType
-from app.routers.my import _list_manageable_channels, _list_open_roulettes
+from app.routers.my import _list_manageable_channels, _list_open_contests
 
 
 class _DummyMember:
@@ -129,7 +129,7 @@ async def test_open_roulettes_order_and_filter(tmp_path) -> None:
         session.add_all([r1, r2, r3])
         await session.commit()
     # Fetch list
-    lst = await _list_open_roulettes(ch1)
+    lst = await _list_open_contests(ch1)
     # Expect only 2, ordered by id desc (r2 newer than r1)
     assert len(lst) == 2
     ids = [rid for rid, _ in lst]
