@@ -52,7 +52,9 @@ def roulette_settings_kb(
     buttons.extend(
         [
             [
-                InlineKeyboardButton(text="✅ تأكيد ونشر المسابقة", callback_data="confirm_settings"),
+                InlineKeyboardButton(
+                    text="✅ تأكيد ونشر المسابقة", callback_data="confirm_settings"
+                ),
             ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
         ]

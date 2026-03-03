@@ -4,6 +4,7 @@ from contextlib import suppress
 from typing import List, Tuple
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
@@ -18,7 +19,7 @@ from ..keyboards.my import (
 )
 from ..services.context import runtime
 from ..services.formatting import StyledText
-from ..utils.compat import safe_answer, safe_edit_text
+from ..utils.compat import safe_edit_text
 
 my_router = Router(name="my")
 
@@ -33,14 +34,21 @@ async def _is_admin_in_channel(bot, channel_id: int, user_id: int) -> bool:
 
 async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
     async for session in get_async_session():
-        stmt = (
-            select(Contest.channel_id)
-            .where(Contest.owner_id == user_id)
-            .distinct(Contest.channel_id)
-        )
-        ch_ids = (await session.execute(stmt)).scalars().all()
+        # 1. Get channels where user owns a contest
+        stmt_owned = select(Contest.channel_id).where(Contest.owner_id == user_id)
+        owned_ids = set((await session.execute(stmt_owned)).scalars().all())
+
+        # 2. Get other channels with open contests and check admin status
+        stmt_all_open = select(Contest.channel_id).where(Contest.is_open.is_(True))
+        all_open_ids = set((await session.execute(stmt_all_open)).scalars().all())
+
+        for ch_id in all_open_ids:
+            if ch_id not in owned_ids:
+                if await _is_admin_in_channel(bot, ch_id, user_id):
+                    owned_ids.add(ch_id)
+
         results = []
-        for ch_id in ch_ids:
+        for ch_id in sorted(list(owned_ids)):
             title = None
             with suppress(Exception):
                 c = await bot.get_chat(ch_id)
@@ -48,7 +56,8 @@ async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
             if not title:
                 title = f"قناة {ch_id}"
             results.append((ch_id, title))
-    return results
+        return results
+    return []
 
 
 async def _list_open_contests(channel_id: int) -> List[Tuple[int, str]]:
@@ -229,8 +238,6 @@ async def renew_publication(cb: CallbackQuery) -> None:
                 ]
             )
         elif c.type == ContestType.YASTAHIQ:
-            from ..keyboards.voting import voting_main_kb
-
             kb = voting_main_kb(
                 c.id, bot_username=runtime.bot_username
             )  # Yastahiq also uses registration button

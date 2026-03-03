@@ -1,0 +1,125 @@
+<<<<<<< SEARCH
+@voting_router.callback_query(F.data.startswith("reg_use_name:"))
+async def reg_use_name_callback(cb: CallbackQuery, state: FSMContext) -> None:
+    contest_id = int(cb.data.split(":")[1])
+    name = cb.from_user.full_name
+    async for session in get_async_session():
+        service = VotingService(session)
+        c = await service.get_contest(contest_id)
+
+        c = await service.get_contest(contest_id)
+            text = f"👤 المتسابق: <b>{name}</b>"
+            kb = contestant_vote_kb(
+                contest_id,
+                entry.id,
+                0,
+                0,
+                c.vote_mode.value if c.vote_mode else "normal",
+                runtime.bot_username,
+            )
+            try:
+                msg = await cb.bot.send_message(
+                    chat_id=c.channel_id, text=text, reply_markup=kb, parse_mode=ParseMode.HTML
+                )
+                entry.message_id = msg.message_id
+                await session.commit()
+
+                link = f"https://t.me/c/{str(c.channel_id).replace('-100','')}/{msg.message_id}"
+                await cb.message.answer(
+                    f"✅ تم تسجيلك بنجاح!\n🆔 رمز التصويت الخاص بك هو: "
+                    f"<code>{entry.unique_code}</code>\n🔗 رابط مشاركتك: {link}",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                await cb.message.answer(
+                    f"✅ تم تسجيلك بنجاح! رمز التصويت الخاص بك هو: "
+                    f"<code>{entry.unique_code}</code>",
+                    parse_mode=ParseMode.HTML,
+                )
+
+    await state.clear()
+    await safe_answer(cb)
+
+
+@voting_router.message(VotingFlow.await_contestant_name)
+async def complete_registration(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    contest_id = data.get("cid")
+    name = (message.text or "").strip()
+
+    if not name or len(name) > 64:
+        await message.answer("⚠️ يرجى إرسال اسم صحيح أقل من 64 حرف.")
+        return
+
+    async for session in get_async_session():
+        service = VotingService(session)
+        entry = await service.register_contestant(c, message.from_user.id, name)
+
+        c = await service.get_contest(contest_id)
+=======
+@voting_router.callback_query(F.data.startswith("reg_use_name:"))
+async def reg_use_name_callback(cb: CallbackQuery, state: FSMContext) -> None:
+    contest_id = int(cb.data.split(":")[1])
+    name = cb.from_user.full_name
+    async for session in get_async_session():
+        service = VotingService(session)
+        c = await service.get_contest(contest_id)
+        if not c:
+            await safe_answer(cb, "⚠️ المسابقة غير موجودة.")
+            return
+
+        entry = await service.register_contestant(c, cb.from_user.id, name)
+
+        if c:
+            text = f"👤 المتسابق: <b>{name}</b>"
+            kb = contestant_vote_kb(
+                contest_id,
+                entry.id,
+                0,
+                0,
+                c.vote_mode.value if c.vote_mode else "normal",
+                runtime.bot_username,
+            )
+            try:
+                msg = await cb.bot.send_message(
+                    chat_id=c.channel_id, text=text, reply_markup=kb, parse_mode=ParseMode.HTML
+                )
+                entry.message_id = msg.message_id
+                await session.commit()
+
+                link = f"https://t.me/c/{str(c.channel_id).replace('-100','')}/{msg.message_id}"
+                await cb.message.answer(
+                    f"✅ تم تسجيلك بنجاح!\n🆔 رمز التصويت الخاص بك هو: "
+                    f"<code>{entry.unique_code}</code>\n🔗 رابط مشاركتك: {link}",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                await cb.message.answer(
+                    f"✅ تم تسجيلك بنجاح! رمز التصويت الخاص بك هو: "
+                    f"<code>{entry.unique_code}</code>",
+                    parse_mode=ParseMode.HTML,
+                )
+
+    await state.clear()
+    await safe_answer(cb)
+
+
+@voting_router.message(VotingFlow.await_contestant_name)
+async def complete_registration(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    contest_id = data.get("cid")
+    name = (message.text or "").strip()
+
+    if not name or len(name) > 64:
+        await message.answer("⚠️ يرجى إرسال اسم صحيح أقل من 64 حرف.")
+        return
+
+    async for session in get_async_session():
+        service = VotingService(session)
+        c = await service.get_contest(contest_id)
+        if not c:
+            await message.answer("⚠️ المسابقة غير موجودة.")
+            return
+
+        entry = await service.register_contestant(c, message.from_user.id, name)
+>>>>>>> REPLACE

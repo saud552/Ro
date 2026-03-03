@@ -1,58 +1,116 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from typing import List, Optional
 
-from aiogram import Router
-from aiogram.enums import ChatMemberStatus
-from aiogram.types import ChatMemberUpdated
+from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 
 from ..db import get_async_session
-from ..db.models import BotChat
+from ..db.models import RouletteGate
+from ..db.repositories import AppSettingRepository, ContestRepository
+from ..services.subscription import GateStatus, SubscriptionService
+from ..utils.compat import safe_edit_text
 
 system_router = Router(name="system")
 
 
-@system_router.my_chat_member()
-async def handle_my_chat_member(update: ChatMemberUpdated) -> None:
-    chat = update.chat
-    chat_id = chat.id
-    chat_type = getattr(chat, "type", "")
-    title = getattr(chat, "title", None)
-    new_status = getattr(update.new_chat_member, "status", None)
-    if not new_status:
-        return
+async def show_verification_interface(
+    cb: CallbackQuery,
+    state: FSMContext,
+    contest_id: int,
+    entry_id: Optional[int],
+    results: List[GateStatus],
+) -> None:
+    """Displays the task list UI for unmet conditions."""
+    lines = ["⚠️ <b>يجب إكمال المهام التالية للمتابعة:</b>\n"]
+    rows = []
+
+    for r in results:
+        if not r.is_passed:
+            status_icon = "❌"
+            if r.error_type == "system_failure":
+                status_icon = "⚠️ (مشكلة تقنية)"
+
+            title = r.gate.channel_title or f"شرط {r.gate.gate_type}"
+            lines.append(f"{status_icon} {title}")
+
+            if r.gate.invite_link:
+                rows.append([InlineKeyboardButton(text=f"🔗 {title}", url=r.gate.invite_link)])
+
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="تم الإنجاز، استمرار ✅",
+                callback_data=f"gate_done:{contest_id}:{entry_id}",
+            )
+        ]
+    )
+
+    text = "\n".join(lines)
+    text += "\n\nبعد إكمال المهام، اضغط على الزر أدناه للتحقق."
+
+    if cb.id == "0":  # From deep link
+        await cb.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    else:
+        await safe_edit_text(cb.message, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@system_router.callback_query(F.data.startswith("gate_done:"))
+async def handle_verification_done(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    contest_id = int(parts[1])
+    entry_val = parts[2]
+    entry_id = int(entry_val) if entry_val != "None" else None
+
     async for session in get_async_session():
-        rec = (
-            await session.execute(select(BotChat).where(BotChat.chat_id == chat_id))
-        ).scalar_one_or_none()
-        if new_status in {
-            ChatMemberStatus.MEMBER,
-            ChatMemberStatus.ADMINISTRATOR,
-            ChatMemberStatus.CREATOR,
-        }:
-            if rec is None:
-                rec = BotChat(
-                    chat_id=chat_id,
-                    chat_type=str(chat_type),
-                    title=title,
-                    added_at=datetime.now(timezone.utc),
-                    removed_at=None,
-                )
-                session.add(rec)
-            else:
-                rec.chat_type = str(chat_type)
-                rec.title = title
-                rec.removed_at = None
-            await session.commit()
-        elif new_status in {
-            ChatMemberStatus.LEFT,
-            ChatMemberStatus.KICKED,
-            ChatMemberStatus.RESTRICTED,
-        }:
-            if rec is not None:
-                rec.removed_at = datetime.now(timezone.utc)
-                await session.commit()
-        else:
-            # ignore other transitions
+        repo = ContestRepository(session)
+        c = await repo.get_by_id(contest_id)
+        if not c:
+            await cb.answer("⚠️ المسابقة لم تعد موجودة.", show_alert=True)
             return
+
+        gates = (
+            (
+                await session.execute(
+                    select(RouletteGate).where(RouletteGate.contest_id == contest_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
+        results = await sub_service.verify_all_conditions(cb.from_user.id, c, gates, session)
+
+        pending = [r for r in results if not r.is_passed]
+        if pending:
+            await cb.answer("⚠️ لم يتم إكمال جميع المهام بعد!", show_alert=True)
+            await show_verification_interface(cb, state, contest_id, entry_id, results)
+            return
+
+        # Success! Dispatch back to original logic
+        await cb.answer("✅ تم التحقق بنجاح!", show_alert=True)
+
+        from ..db.models import ContestType
+
+        if entry_id:
+            # Selection interaction (Vote or Yastahiq copy text)
+            if c.type == ContestType.YASTAHIQ:
+                 from .yastahiq import handle_yastahiq_interaction
+                 cb.data = f"yastahiq_interact:{contest_id}:{entry_id}"
+                 await handle_yastahiq_interaction(cb, state)
+            else:
+                 from .voting import handle_normal_vote
+                 cb.data = f"vote_norm:{contest_id}:{entry_id}"
+                 await handle_normal_vote(cb, state)
+        else:
+            # Registration / Joining
+            if c.type in {ContestType.VOTE, ContestType.YASTAHIQ}:
+                from .voting import start_registration
+                cb.data = f"reg_contest:{contest_id}"
+                await start_registration(cb, state)
+            else:
+                from .roulette import handle_join_request
+                cb.data = f"join:{contest_id}"
+                await handle_join_request(cb, state)

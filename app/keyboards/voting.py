@@ -43,6 +43,24 @@ def voting_main_kb(contest_id: int, bot_username: str = "bot") -> InlineKeyboard
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def registration_confirm_kb(contest_id: int) -> InlineKeyboardMarkup:
+    """Keyboard for confirming registration with current name or custom name."""
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="✅ نعم، استخدم اسمي", callback_data=f"reg_use_name:{contest_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="✍️ لا، كتابة اسم مخصص", callback_data=f"reg_custom:{contest_id}"
+            )
+        ],
+        [InlineKeyboardButton(text="🔙 إلغاء", callback_data="back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def contestant_vote_kb(
     contest_id: int, entry_id: int, votes: int, stars: int, mode: str, bot_username: str
 ) -> InlineKeyboardMarkup:
