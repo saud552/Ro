@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, Message, PreCheckoutQuery
 from sqlalchemy import select
 
 from ..db import get_async_session
-from ..db.models import RouletteGate
+from ..db.models import ContestType, RouletteGate
 from ..db.repositories import AppSettingRepository
 from ..keyboards.common import back_kb
 from ..keyboards.voting import (
@@ -88,6 +88,26 @@ async def handle_entry_view(cb: CallbackQuery, state: FSMContext) -> None:
         c = await service.get_contest(contest_id)
         if not c or not c.is_open:
             await safe_answer(cb, "⚠️ عذراً، التصويت مغلق حالياً.", show_alert=True)
+            return
+
+        if c.type == ContestType.YASTAHIQ:
+            from .yastahiq import handle_yastahiq_interaction
+            cb.data = f"yastahiq_interact:{contest_id}:{entry_id}"
+            await handle_yastahiq_interaction(cb, state)
+            return
+
+        # Check conditions even before seeing the selection
+        sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
+        gates = (
+            (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == contest_id)))
+            .scalars()
+            .all()
+        )
+        results = await sub_service.verify_all_conditions(cb.from_user.id, c, gates, session)
+        pending = [r for r in results if not r.is_passed]
+        if pending:
+            from .system import show_verification_interface
+            await show_verification_interface(cb, state, contest_id, entry_id, results)
             return
 
         entry = await service.entry_repo.get_by_id(entry_id)
@@ -400,6 +420,7 @@ async def handle_vote_draw(cb: CallbackQuery) -> None:
             await safe_answer(cb, "⚠️ لا يوجد متسابقون لإعلان فوزهم.", show_alert=True)
             return
 
+        # Filter and pick winners
         winners = []
         for entry in all_entries:
             if len(winners) >= c.winners_count:

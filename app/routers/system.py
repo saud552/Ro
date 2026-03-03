@@ -91,21 +91,25 @@ async def handle_verification_done(cb: CallbackQuery, state: FSMContext) -> None
         # Success! Dispatch back to original logic
         await cb.answer("✅ تم التحقق بنجاح!", show_alert=True)
 
+        from ..db.models import ContestType
+
         if entry_id:
-            from .voting import handle_normal_vote
-
-            cb.data = f"vote_norm:{contest_id}:{entry_id}"
-            await handle_normal_vote(cb, state)
+            # Selection interaction (Vote or Yastahiq copy text)
+            if c.type == ContestType.YASTAHIQ:
+                 from .yastahiq import handle_yastahiq_interaction
+                 cb.data = f"yastahiq_interact:{contest_id}:{entry_id}"
+                 await handle_yastahiq_interaction(cb, state)
+            else:
+                 from .voting import handle_normal_vote
+                 cb.data = f"vote_norm:{contest_id}:{entry_id}"
+                 await handle_normal_vote(cb, state)
         else:
-            from ..db.models import ContestType
-
-            if c.type == ContestType.VOTE:
+            # Registration / Joining
+            if c.type in {ContestType.VOTE, ContestType.YASTAHIQ}:
                 from .voting import start_registration
-
                 cb.data = f"reg_contest:{contest_id}"
                 await start_registration(cb, state)
             else:
                 from .roulette import handle_join_request
-
                 cb.data = f"join:{contest_id}"
                 await handle_join_request(cb, state)

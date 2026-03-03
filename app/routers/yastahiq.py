@@ -2,23 +2,60 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.enums import ChatType, ParseMode
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 
 from ..db import get_async_session
+from ..db.models import ContestEntry, RouletteGate
+from ..db.repositories import AppSettingRepository, ContestRepository
+from ..services.context import runtime
+from ..services.subscription import SubscriptionService
 from ..services.yastahiq import YastahiqService
-from ..utils.compat import safe_answer
+from ..utils.compat import safe_answer, safe_edit_text
 
 yastahiq_router = Router(name="yastahiq")
 
 
 @yastahiq_router.callback_query(F.data.startswith("yastahiq_interact:"))
-async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
-    """Show copyable text for Yastahiq contestants."""
+async def handle_yastahiq_interaction(cb: CallbackQuery, state: FSMContext) -> None:
+    """Show copyable text for Yastahiq contestants, after verifying conditions."""
     parts = cb.data.split(":")
+    # Expected: yastahiq_interact:contest_id:entry_id
+    contest_id = int(parts[1])
     entry_id = int(parts[2])
 
     async for session in get_async_session():
-        from ..db.models import ContestEntry
+        repo = ContestRepository(session)
+        c = await repo.get_by_id(contest_id)
+        if not c or not c.is_open:
+            await safe_answer(cb, "⚠️ عذراً، المشاركة مغلقة حالياً.", show_alert=True)
+            return
+
+        # Check conditions
+        sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
+        gates = (
+            (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == contest_id)))
+            .scalars()
+            .all()
+        )
+        results = await sub_service.verify_all_conditions(cb.from_user.id, c, gates, session)
+
+        # Monitor failures
+        from ..services.security import FailureMonitor
+        monitor = FailureMonitor(runtime.redis)
+        for r in results:
+            if r.error_type == "system_failure":
+                await monitor.report_failure(c.id, c.owner_id, r.gate.id, cb.bot)
+            elif r.is_passed:
+                await monitor.reset_failure(c.id, r.gate.id)
+
+        pending = [r for r in results if not r.is_passed]
+        if pending:
+            from .system import show_verification_interface
+            # Pass entry_id as well to return here
+            await show_verification_interface(cb, state, contest_id, entry_id, results)
+            return
 
         entry = await session.get(ContestEntry, entry_id)
         if not entry:
@@ -36,7 +73,7 @@ async def handle_yastahiq_interaction(cb: CallbackQuery) -> None:
         if cb.id == "0":
             await cb.message.answer(text, parse_mode=ParseMode.HTML)
         else:
-            await cb.message.edit_text(text, parse_mode=ParseMode.HTML)
+            await safe_edit_text(cb.message, text, parse_mode=ParseMode.HTML)
 
     await safe_answer(cb)
 
