@@ -8,8 +8,10 @@ def roulette_settings_kb(
     sub_check_disabled: bool,
     anti_bot_enabled: bool,
     exclude_leavers_enabled: bool,
+    prevent_multiple_votes: bool = False,
+    is_vote: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Keyboard for customizing roulette settings during creation."""
+    """Keyboard for customizing roulette and voting settings during creation."""
     buttons = [
         [
             InlineKeyboardButton(
@@ -35,9 +37,24 @@ def roulette_settings_kb(
                 callback_data="toggle_leavers",
             )
         ],
-        [
-            InlineKeyboardButton(text="✅ تأكيد وبدء السحب", callback_data="confirm_settings"),
-        ],
-        [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
     ]
+
+    if is_vote:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🚫 منع التصويت المتعدد: {'مفعل' if prevent_multiple_votes else 'معطل'}",
+                    callback_data="toggle_multiple_votes",
+                )
+            ]
+        )
+
+    buttons.extend(
+        [
+            [
+                InlineKeyboardButton(text="✅ تأكيد ونشر المسابقة", callback_data="confirm_settings"),
+            ],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=buttons)

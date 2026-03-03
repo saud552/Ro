@@ -4,52 +4,43 @@ from contextlib import suppress
 from typing import List, Tuple
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 
 from ..db import get_async_session
 from ..db.models import Contest, ContestType, RouletteGate
 from ..db.repositories import ContestEntryRepository
-from ..keyboards.my import my_channels_kb, my_manage_kb, my_roulettes_kb
+from ..keyboards.my import (
+    my_channels_kb,
+    my_manage_kb,
+    my_roulettes_kb,
+)
 from ..services.context import runtime
 from ..services.formatting import StyledText
+from ..utils.compat import safe_answer, safe_edit_text
 
 my_router = Router(name="my")
 
 
-async def _is_admin_in_channel(bot, chat_id: int, user_id: int) -> bool:
+async def _is_admin_in_channel(bot, channel_id: int, user_id: int) -> bool:
     try:
-        member = await bot.get_chat_member(chat_id, user_id)
-        return member.status in {"administrator", "creator"}
+        member = await bot.get_chat_member(channel_id, user_id)
+        return member.status in ["administrator", "creator"]
     except Exception:
         return False
 
 
 async def _list_manageable_channels(bot, user_id: int) -> List[Tuple[int, str]]:
-    """Return list of channels where user is admin or owner of active contests."""
     async for session in get_async_session():
-        owner_channels = (
-            (await session.execute(select(Contest.channel_id).where(Contest.owner_id == user_id)))
-            .scalars()
-            .all()
+        stmt = (
+            select(Contest.channel_id)
+            .where(Contest.owner_id == user_id)
+            .distinct(Contest.channel_id)
         )
-        all_active_channels = (
-            (await session.execute(select(Contest.channel_id).where(Contest.is_open.is_(True))))
-            .scalars()
-            .all()
-        )
-        channels = set(owner_channels) | set(all_active_channels)
-
-    results: List[Tuple[int, str]] = []
-    for ch_id in sorted(channels):
-        if (ch_id in owner_channels) or (await _is_admin_in_channel(bot, ch_id, user_id)):
+        ch_ids = (await session.execute(stmt)).scalars().all()
+        results = []
+        for ch_id in ch_ids:
             title = None
             with suppress(Exception):
                 c = await bot.get_chat(ch_id)
@@ -120,8 +111,10 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
             .first()
         )
         if not r:
-            await cb.message.edit_text(
-                "⚠️ لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
+            await safe_edit_text(
+                cb.message,
+                "⚠️ لا توجد مسابقات مفتوحة حالياً في هذه القناة.",
+                reply_markup=my_channels_kb(chs),
             )
             await cb.answer()
             return
@@ -137,7 +130,8 @@ async def my_channel_jump_latest(cb: CallbackQuery) -> None:
             f"🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n"
             f"👥 عدد المشاركين: {count}"
         )
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
             parse_mode=ParseMode.HTML,
@@ -158,13 +152,15 @@ async def my_channel_list(cb: CallbackQuery) -> None:
         return
     rlist = await _list_open_contests(chat_id)
     if not rlist:
-        await cb.message.edit_text(
-            "⚠️ لا توجد مسابقات مفتوحة حالياً في هذه القناة.", reply_markup=my_channels_kb(chs)
+        await safe_edit_text(
+            cb.message,
+            "⚠️ لا توجد مسابقات مفتوحة حالياً في هذه القناة.",
+            reply_markup=my_channels_kb(chs),
         )
         await cb.answer()
         return
-    await cb.message.edit_text(
-        "📋 اختر المسابقة لإدارتها:", reply_markup=my_roulettes_kb(chat_id, rlist)
+    await safe_edit_text(
+        cb.message, "📋 اختر المسابقة لإدارتها:", reply_markup=my_roulettes_kb(chat_id, rlist)
     )
     await cb.answer()
 
@@ -193,7 +189,8 @@ async def my_roulette(cb: CallbackQuery) -> None:
             f"🔹 الحالة: {'✅ مفتوح' if r.is_open else '⏸️ موقوف'}\n"
             f"👥 عدد المشاركين: {count}"
         )
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             text,
             reply_markup=my_manage_kb(r.id, r.is_open, r.channel_id, count, r.type),
             parse_mode=ParseMode.HTML,
@@ -279,7 +276,7 @@ async def cancel_event_ask(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 تراجع", callback_data=f"myr:{contest_id}")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode=ParseMode.HTML)
     await cb.answer()
 
 
@@ -295,7 +292,8 @@ async def cancel_event_exec(cb: CallbackQuery) -> None:
         await session.delete(c)
         await session.commit()
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         "✅ تم حذف وإلغاء الفعالية بنجاح.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
@@ -314,11 +312,11 @@ async def back_to_my_draws(cb: CallbackQuery) -> None:
     # Use the same logic as my_entry but edit text
     chs = await _list_manageable_channels(cb.bot, cb.from_user.id)
     if not chs:
-        await cb.message.edit_text("⚠️ لا توجد مسابقات فعّالة حالياً.")
+        await safe_edit_text(cb.message, "⚠️ لا توجد مسابقات فعّالة حالياً.")
         await cb.answer()
         return
-    await cb.message.edit_text(
-        "📋 اختر قناة لإدارة سحوباتها وتصويتاتها:", reply_markup=my_channels_kb(chs)
+    await safe_edit_text(
+        cb.message, "📋 اختر قناة لإدارة سحوباتها وتصويتاتها:", reply_markup=my_channels_kb(chs)
     )
     await cb.answer()
 

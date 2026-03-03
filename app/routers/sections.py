@@ -9,6 +9,7 @@ from sqlalchemy import select
 from ..db import get_async_session
 from ..db.models import FeatureAccess, User
 from ..keyboards.common import main_menu_kb
+from ..utils.compat import safe_answer, safe_edit_text
 
 sections_router = Router(name="sections")
 
@@ -30,7 +31,7 @@ async def section_roulette(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -51,7 +52,7 @@ async def section_vote(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -68,7 +69,7 @@ async def section_yastahiq(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
@@ -87,8 +88,25 @@ async def section_quiz(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
+
+
+@sections_router.callback_query(F.data == "section_channels")
+async def section_channels(cb: CallbackQuery) -> None:
+    text = (
+        "📢 <b>إدارة القنوات والمجموعات</b>\n\n"
+        "يمكنك هنا ربط قنواتك لتتمكن من استخدامها في شروط الانضمام للمسابقات."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 ربط قناة جديدة", callback_data="link_channel")],
+            [InlineKeyboardButton(text="✂️ فك ارتباط قناة", callback_data="unlink_channel")],
+            [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
+        ]
+    )
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
+    await safe_answer(cb)
 
 
 @sections_router.callback_query(F.data == "section_referral")
@@ -110,13 +128,9 @@ async def section_referral(cb: CallbackQuery) -> None:
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 ربط قناة/مجموعات", callback_data="link_channel")],
-            [InlineKeyboardButton(text="✂️ فك ارتباط", callback_data="unlink_channel")],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    from ..utils.compat import safe_answer, safe_edit_text
-
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await safe_answer(cb)
 
@@ -150,13 +164,9 @@ async def section_account(cb: CallbackQuery) -> None:
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 ربط قناة/مجموعات", callback_data="link_channel")],
-            [InlineKeyboardButton(text="✂️ فك ارتباط", callback_data="unlink_channel")],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    from ..utils.compat import safe_answer, safe_edit_text
-
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await safe_answer(cb)
 
@@ -194,13 +204,13 @@ async def section_store(cb: CallbackQuery) -> None:
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="main_menu")],
         ]
     )
-    await cb.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode="HTML")
     await cb.answer()
 
 
 @sections_router.callback_query(F.data == "main_menu")
 async def back_to_main(cb: CallbackQuery) -> None:
-    await cb.message.edit_text(
+    await safe_edit_text(cb.message,
         "يرجى اختيار القسم المطلوب من القائمة أدناه:",
         reply_markup=main_menu_kb(),
     )
