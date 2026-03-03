@@ -1,0 +1,5 @@
+WARNING:aiogram.dispatcher:Received SIGTERM signal
+INFO:aiogram.dispatcher:Polling stopped for bot @RouletteKBot id=8564869368 - 'روليت خيال 🎰'
+INFO:aiogram.dispatcher:Polling stopped
+INFO:aiogram.dispatcher:Start polling
+INFO:aiogram.dispatcher:Run polling for bot @RouletteKBot id=8564869368 - 'روليت خيال 🎰'

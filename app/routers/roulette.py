@@ -108,7 +108,7 @@ def _build_channel_post_text(c: Contest, participants_count: int) -> str:
     return f"{type_label}\n\n{styled}\n\n{status_line}\n👥 عدد المشاركين: {participants_count}"
 
 
-async def _get_channel_title_and_link(bot, chat_id: int) -> tuple[str, Optional[str]]:
+async def _get_channel_title_and_link(bot, chat_id: int | str) -> tuple[str, Optional[str]]:
     try:
         chat = await bot.get_chat(chat_id)
         title = chat.title or "قناة غير معروفة"
@@ -283,7 +283,12 @@ async def handle_forwarded_channel(message: Message) -> None:
 
 
 @roulette_router.message(F.text.startswith("https://t.me/"))
-async def handle_link_text(message: Message) -> None:
+async def handle_link_text(message: Message, state: FSMContext) -> None:
+    cur = await state.get_state()
+    if cur == CreateRoulette.await_gate_target:
+        await handle_gate_input_manual(message, state)
+        return
+
     # Basic support for joining by link if public
     url = message.text.strip()
     username = url.split("/")[-1]
@@ -562,29 +567,65 @@ async def gate_event_selection(cb: CallbackQuery, state: FSMContext) -> None:
 
 
 @roulette_router.message(CreateRoulette.await_gate_target)
-async def collect_gate_target_code(message: Message, state: FSMContext) -> None:
-    code = (message.text or "").strip().upper()
+async def handle_gate_input_manual(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    gtype = data.get("gate_type")
+    raw = (message.text or "").strip()
 
-    # Validation of the code - search for it in the DB
-    async for session in get_async_session():
-        stmt = select(ContestEntry.id, ContestEntry.contest_id).where(
-            ContestEntry.unique_code == code
-        )
-        res = await session.execute(stmt)
-        row = res.first()
-        if not row:
-            await message.answer(
-                "❌ عذراً، لم يتم العثور على متسابق بهذا الرمز. يرجى التأكد من الرمز والمحاولة مجدداً."
+    if gtype in {"channel", "group"}:
+        # Try to resolve chat from link/username/id
+        target = raw
+        if "t.me/" in target:
+            target = "@" + target.split("/")[-1]
+
+        try:
+            chat = await message.bot.get_chat(target)
+            if (gtype == "channel" and chat.type != "channel") or \
+               (gtype == "group" and chat.type not in {"group", "supergroup"}):
+                 await message.answer(f"❌ هذا ليس {'قناة' if gtype=='channel' else 'مجموعة'}!")
+                 return
+
+            # Check bot admin
+            me = await message.bot.get_chat_member(chat.id, runtime.bot_id)
+            if me.status != "administrator":
+                await message.answer("❌ يجب إضافة البوت كمشرف في القناة/المجموعة أولاً.")
+                return
+
+            title, link = await _get_channel_title_and_link(message.bot, chat.id)
+            if not link:
+                try:
+                    invite = await message.bot.create_chat_invite_link(chat.id)
+                    link = invite.invite_link
+                except Exception:
+                    pass
+
+            gates = list(data.get("gate_channels", []))
+            gates.append({"type": gtype, "id": chat.id, "title": title, "link": link})
+            await state.update_data(gate_channels=gates)
+            await message.answer("🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
+        except Exception:
+             await message.answer("❌ تعذر العثور على القناة/المجموعة. تأكد من صحة الرابط/المعرف ومن وجود البوت كمشرف.")
+
+    elif gtype == "vote":
+        code = raw.upper()
+        # Validation of the code - search for it in the DB
+        async for session in get_async_session():
+            stmt = select(ContestEntry.id, ContestEntry.contest_id).where(
+                ContestEntry.unique_code == code
             )
-            return
+            res = await session.execute(stmt)
+            row = res.first()
+            if not row:
+                await message.answer(
+                    "❌ عذراً، لم يتم العثور على متسابق بهذا الرمز. يرجى التأكد من الرمز والمحاولة مجدداً."
+                )
+                return
 
-        cid = row[1]
-        gates = list(data.get("gate_channels", []))
-        gates.append({"type": "vote", "id": cid, "code": code, "title": f"تصويت لـ {code}"})
-        await state.update_data(gate_channels=gates)
-
-    await message.answer("🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
+            cid = row[1]
+            gates = list(data.get("gate_channels", []))
+            gates.append({"type": "vote", "id": cid, "code": code, "title": f"تصويت لـ {code}"})
+            await state.update_data(gate_channels=gates)
+        await message.answer("🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
 
 
 @roulette_router.callback_query(F.data.startswith("gate_pick_apply:"))
@@ -999,7 +1040,7 @@ async def count_refresh_handler(cb: CallbackQuery) -> None:
             )
             gate_links = [(g.channel_title, g.invite_link) for g in gate_rows if g.invite_link]
 
-            if c.type == ContestType.VOTE or c.type == ContestType.YASTAHIQ:
+            if c.type in {ContestType.VOTE, ContestType.YASTAHIQ}:
                 from ..keyboards.voting import voting_main_kb
                 kb = voting_main_kb(c.id, bot_username=runtime.bot_username)
             else:
