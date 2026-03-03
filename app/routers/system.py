@@ -33,10 +33,11 @@ async def show_verification_interface(
             if r.error_type == "system_failure":
                 status_icon = "⚠️ (مشكلة تقنية)"
 
-            lines.append(f"{status_icon} {r.gate_title}")
+            title = r.gate.channel_title or f"شرط {r.gate.gate_type}"
+            lines.append(f"{status_icon} {title}")
 
-            if r.gate_link:
-                rows.append([InlineKeyboardButton(text=f"🔗 {r.gate_title}", url=r.gate_link)])
+            if r.gate.invite_link:
+                rows.append([InlineKeyboardButton(text=f"🔗 {title}", url=r.gate.invite_link)])
 
     rows.append(
         [
