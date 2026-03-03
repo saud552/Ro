@@ -215,9 +215,7 @@ async def unlink_channel(cb: CallbackQuery) -> None:
         rows = []
         for link in links:
             label = link.channel_title or str(link.channel_id)
-            rows.append(
-                [InlineKeyboardButton(text=label, callback_data=f"unlinkch:{link.channel_id}")]
-            )
+            rows.append([InlineKeyboardButton(text=label, callback_data=f"unlinkch:{link.channel_id}")])
         rows.append([InlineKeyboardButton(text="🔙 رجوع", callback_data="back")])
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
         await cb.message.answer("🗑️ اختر القناة المراد فك ارتباطها:", reply_markup=kb)
@@ -333,9 +331,7 @@ async def go_back(cb: CallbackQuery, state: FSMContext) -> None:
         await safe_edit_text(cb.message, "📝 أرسل نص كليشة المسابقة:", reply_markup=back_kb())
     elif cur == CreateRoulette.await_winners:
         await state.set_state(CreateRoulette.await_gate_choice)
-        await safe_edit_text(
-            cb.message, "🛡️ هل تريد إضافة شروط انضمام؟", reply_markup=gate_choice_kb()
-        )
+        await safe_edit_text(cb.message, "🛡️ هل تريد إضافة شروط انضمام؟", reply_markup=gate_choice_kb())
     elif cur == CreateRoulette.await_settings:
         await state.set_state(CreateRoulette.await_winners)
         await safe_edit_text(cb.message, "🏆 كم عدد الفائزين المطلوب؟ (أرسل رقماً بين 1 و 100):")
@@ -381,9 +377,7 @@ async def gate_skip(cb: CallbackQuery, state: FSMContext) -> None:
 
 @roulette_router.callback_query(F.data == "gate_add")
 async def gate_add(cb: CallbackQuery, state: FSMContext) -> None:
-    await safe_edit_text(
-        cb.message, "🛡️ اختر نوع الشرط المراد إضافته:", reply_markup=gate_add_menu_kb()
-    )
+    await safe_edit_text(cb.message, "🛡️ اختر نوع الشرط المراد إضافته:", reply_markup=gate_add_menu_kb())
     await cb.answer()
 
 
@@ -419,9 +413,7 @@ async def gate_type_select(cb: CallbackQuery, state: FSMContext) -> None:
 
             await state.update_data(sub_view="gate_pick")
             items = [(link.channel_id, link.channel_title) for link in links]
-            await safe_edit_text(
-                cb.message, "📋 اختر من قنواتك المرتبطة:", reply_markup=gate_pick_list_kb(items)
-            )
+            await safe_edit_text(cb.message, "📋 اختر من قنواتك المرتبطة:", reply_markup=gate_pick_list_kb(items))
 
     elif gtype == "yastahiq":
         await state.update_data(sub_view="gate_sel_yastahiq")
@@ -868,11 +860,6 @@ async def handle_join_request(cb: CallbackQuery, state: FSMContext) -> None:
 
         # Check sub logic
         sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
-        if not c.sub_check_disabled:
-            if not await sub_service.check_forced_subscription(cb.from_user.id):
-                await cb.message.answer("⚠️ يجب الاشتراك في قناة البوت أولاً!")
-                await safe_answer(cb)
-                return
 
         # Check gates
         gates = (
@@ -884,7 +871,7 @@ async def handle_join_request(cb: CallbackQuery, state: FSMContext) -> None:
             .scalars()
             .all()
         )
-        results = await sub_service.verify_all_gates(cb.from_user.id, gates, session)
+        results = await sub_service.verify_all_conditions(cb.from_user.id, c, gates, session)
 
         # Monitor failures
         from ..services.security import FailureMonitor

@@ -3,50 +3,17 @@ from __future__ import annotations
 from typing import List, Optional
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
 
 from ..db import get_async_session
-from ..db.models import Contest, ContestType, RouletteGate
-from ..db.repositories import AppSettingRepository
+from ..db.models import RouletteGate
+from ..db.repositories import AppSettingRepository, ContestRepository
 from ..services.subscription import GateStatus, SubscriptionService
-from ..utils.compat import safe_answer, safe_edit_text
+from ..utils.compat import safe_edit_text
 
 system_router = Router(name="system")
-
-
-class VerificationState(StatesGroup):
-    pending = State()
-
-
-def get_verification_kb(gates: List[GateStatus]) -> InlineKeyboardMarkup:
-    """Build keyboard for pending tasks."""
-    buttons = []
-    for g in gates:
-        if not g.is_passed:
-            text = f"🔹 {g.gate.channel_title or g.gate.gate_type}"
-            url = g.gate.invite_link
-            if not url:
-                # Custom handling for specific types if link is missing
-                if g.gate.gate_type == "vote":
-                    # Potentially link to a contest message if we had it
-                    pass
-
-            if url:
-                buttons.append([InlineKeyboardButton(text=text, url=url)])
-            else:
-                buttons.append([InlineKeyboardButton(text=f"📌 {text}", callback_data="none")])
-
-    buttons.append([InlineKeyboardButton(text="تم الإنجاز ✅", callback_data="verify_check")])
-    buttons.append([InlineKeyboardButton(text="إلغاء ❌", callback_data="verify_cancel")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 async def show_verification_interface(
@@ -54,80 +21,91 @@ async def show_verification_interface(
     state: FSMContext,
     contest_id: int,
     entry_id: Optional[int],
-    gates: List[GateStatus],
-):
-    """Show the verification UI to the user."""
-    await state.set_state(VerificationState.pending)
-    await state.update_data(v_cid=contest_id, v_eid=entry_id)
+    results: List[GateStatus],
+) -> None:
+    """Displays the task list UI for unmet conditions."""
+    lines = ["⚠️ <b>يجب إكمال المهام التالية للمتابعة:</b>\n"]
+    rows = []
 
-    pending_count = sum(1 for g in gates if not g.is_passed)
-    text = (
-        f"⏳ <b>يتبقى عليك تنفيذ {pending_count} من المهام:</b>\n\n"
-        "يرجى تنفيذ المهام المطلوبة أدناه ثم الضغط على زر التحقق.\n"
-        "<i>لن يتم احتساب اشتراكك/تصويتك إلا بعد إتمام جميع المهام.</i>"
+    for r in results:
+        if not r.is_passed:
+            status_icon = "❌"
+            if r.error_type == "system_failure":
+                status_icon = "⚠️ (مشكلة تقنية)"
+
+            lines.append(f"{status_icon} {r.gate_title}")
+
+            if r.gate_link:
+                rows.append([InlineKeyboardButton(text=f"🔗 {r.gate_title}", url=r.gate_link)])
+
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="تم الإنجاز، استمرار ✅",
+                callback_data=f"gate_done:{contest_id}:{entry_id}",
+            )
+        ]
     )
-    kb = get_verification_kb(gates)
-    await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+
+    text = "\n".join(lines)
+    text += "\n\nبعد إكمال المهام، اضغط على الزر أدناه للتحقق."
+
+    if cb.id == "0":  # From deep link
+        await cb.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    else:
+        await safe_edit_text(cb.message, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
-@system_router.callback_query(VerificationState.pending, F.data == "verify_check")
-async def handle_verify_check(cb: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    contest_id = data.get("v_cid")
-    entry_id = data.get("v_eid")
+@system_router.callback_query(F.data.startswith("gate_done:"))
+async def handle_verification_done(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    contest_id = int(parts[1])
+    entry_val = parts[2]
+    entry_id = int(entry_val) if entry_val != "None" else None
 
     async for session in get_async_session():
-        c = await session.get(Contest, contest_id)
+        repo = ContestRepository(session)
+        c = await repo.get_by_id(contest_id)
         if not c:
-            await state.clear()
-            await safe_answer(cb, "⚠️ المسابقة غير موجودة.")
+            await cb.answer("⚠️ المسابقة لم تعد موجودة.", show_alert=True)
             return
 
-        stmt = select(RouletteGate).where(RouletteGate.contest_id == contest_id)
-        gates_list = (await session.execute(stmt)).scalars().all()
-
+        gates = (
+            (
+                await session.execute(
+                    select(RouletteGate).where(RouletteGate.contest_id == contest_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
         sub_service = SubscriptionService(cb.bot, AppSettingRepository(session))
-        results = await sub_service.verify_all_gates(cb.from_user.id, gates_list, session)
+        results = await sub_service.verify_all_conditions(cb.from_user.id, c, gates, session)
 
         pending = [r for r in results if not r.is_passed]
-        if not pending:
-            await state.clear()
-            # Transition back to voting/joining logic
+        if pending:
+            await cb.answer("⚠️ لم يتم إكمال جميع المهام بعد!", show_alert=True)
+            await show_verification_interface(cb, state, contest_id, entry_id, results)
+            return
+
+        # Success! Dispatch back to original logic
+        await cb.answer("✅ تم التحقق بنجاح!", show_alert=True)
+
+        if entry_id:
+            from .voting import handle_normal_vote
+
+            cb.data = f"vote_norm:{contest_id}:{entry_id}"
+            await handle_normal_vote(cb, state)
+        else:
+            from ..db.models import ContestType
+
             if c.type == ContestType.VOTE:
-                # If it's registration
-                if entry_id is None:
-                    from .voting import start_registration
+                from .voting import start_registration
 
-                    cb.data = f"reg_contest:{contest_id}"
-                    await start_registration(cb, state)
-                else:
-                    # If it's voting
-                    from .voting import handle_normal_vote
-
-                    cb.data = f"vote_norm:{contest_id}:{entry_id}"
-                    await handle_normal_vote(cb, state)
+                cb.data = f"reg_contest:{contest_id}"
+                await start_registration(cb, state)
             else:
-                # Roulette join
                 from .roulette import handle_join_request
 
                 cb.data = f"join:{contest_id}"
                 await handle_join_request(cb, state)
-            return
-
-        # Still have pending gates
-        pending_titles = [g.gate.channel_title for g in pending]
-        await safe_answer(cb, f"⚠️ يتبقى عليك: {', '.join(pending_titles[:2])}...", show_alert=True)
-
-        # Refresh interface
-        await show_verification_interface(cb, state, contest_id, entry_id, results)
-
-
-@system_router.callback_query(VerificationState.pending, F.data == "verify_cancel")
-async def handle_verify_cancel(cb: CallbackQuery, state: FSMContext):
-    await state.clear()
-    from ..keyboards.common import main_menu_kb
-
-    await safe_edit_text(
-        cb.message, "❌ تم إلغاء العملية والعودة للبداية.", reply_markup=main_menu_kb()
-    )
-    await cb.answer()

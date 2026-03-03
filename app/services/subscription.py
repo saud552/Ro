@@ -7,7 +7,7 @@ from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 from sqlalchemy import select
 
-from ..db.models import ContestEntry, RouletteGate, Vote
+from ..db.models import Contest, ContestEntry, RouletteGate, Vote
 from ..db.repositories import AppSettingRepository
 
 
@@ -30,7 +30,7 @@ class SubscriptionService:
         """Check if user is subscribed to the mandatory bot channel."""
         channel = await self.setting_repo.get_value("bot_base_channel")
         if not channel:
-            return True  # No restriction if not set
+            return True
 
         passed, _ = await self.is_member_safe(channel, user_id)
         return passed
@@ -52,7 +52,6 @@ class SubscriptionService:
             }
             return is_member, False
         except Exception as e:
-            # Check if it's a system error (bot kicked, etc)
             error_str = str(e).lower()
             is_system = any(
                 x in error_str
@@ -60,21 +59,49 @@ class SubscriptionService:
             )
             return False, is_system
 
-    async def verify_all_gates(
-        self, user_id: int, gates: List[RouletteGate], session: Any
+    async def verify_all_conditions(
+        self, user_id: int, contest: Contest, gates: List[RouletteGate], session: Any
     ) -> List[GateStatus]:
-        """Verify all gates and return detailed status for each."""
+        """Verify forced sub AND custom gates."""
         results = []
+
+        # 1. Mandatory Bot Channel
+        if not contest.sub_check_disabled:
+            channel = await self.get_required_channel()
+            if channel:
+                passed, is_sys = await self.is_member_safe(channel, user_id)
+                # Create a virtual gate for the UI
+                url = f"https://t.me/{channel.lstrip('@')}"
+                fake_gate = RouletteGate(
+                    channel_title="قناة البوت الرسمية",
+                    invite_link=url,
+                    gate_type="channel",
+                    id=0,  # Special ID for base channel
+                )
+                results.append(
+                    GateStatus(
+                        is_passed=passed,
+                        gate=fake_gate,
+                        error_type=(
+                            "system_failure" if is_sys else ("user_failure" if not passed else None)
+                        ),
+                    )
+                )
+
+        # 2. Custom Gates
         for gate in gates:
             passed, is_sys_error = await self.check_gate_detailed(user_id, gate, session)
             status = GateStatus(
                 is_passed=passed,
                 gate=gate,
                 error_type=(
-                    "system_failure" if is_sys_error else ("user_failure" if not passed else None)
+                    "system_failure"
+                    if is_sys_error
+                    else ("user_failure" if not passed else None)
                 ),
             )
             results.append(status)
+
         return results
 
     async def check_gate_detailed(
@@ -85,8 +112,6 @@ class SubscriptionService:
             return await self.is_member_safe(gate.channel_id, user_id)
 
         if gate.gate_type == "vote":
-            # Check if user voted for specific contestant code
-            # If target_id is missing, search globally
             if gate.target_id:
                 stmt_e = select(ContestEntry.id).where(
                     ContestEntry.contest_id == gate.target_id,
@@ -123,8 +148,6 @@ class SubscriptionService:
             return res.scalar_one_or_none() is not None, False
 
         if gate.gate_type == "yastahiq":
-            # Check if user has at least 1 vote as a VOTER in target yastahiq contest
-            # (Requires YastahiqService to record Votes)
             if not gate.target_id:
                 return True, False
             stmt = select(Vote).where(Vote.contest_id == gate.target_id, Vote.voter_id == user_id)
@@ -132,6 +155,23 @@ class SubscriptionService:
             return res.scalar_one_or_none() is not None, False
 
         return True, False
+
+    async def verify_all_gates(
+        self, user_id: int, gates: List[RouletteGate], session: Any
+    ) -> List[GateStatus]:
+        """Legacy wrapper for custom gates only."""
+        results = []
+        for gate in gates:
+            passed, is_sys_error = await self.check_gate_detailed(user_id, gate, session)
+            status = GateStatus(
+                is_passed=passed,
+                gate=gate,
+                error_type=(
+                    "system_failure" if is_sys_error else ("user_failure" if not passed else None)
+                ),
+            )
+            results.append(status)
+        return results
 
     async def check_gate(self, user_id: int, gate: Any, session: Any) -> bool:
         """Legacy wrapper."""
