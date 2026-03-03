@@ -157,14 +157,17 @@ async def start_create_flow(cb: CallbackQuery, state: FSMContext, ctype: Contest
             for link in links:
                 items.append((link.channel_id, link.channel_title or f"Chat {link.channel_id}"))
             await state.set_state(CreateRoulette.await_channel)
-            await safe_edit_text(cb.message,
-                "📋 اختر القناة التي تريد نشر الفعالية فيها:", reply_markup=select_channel_kb(items)
+            await safe_edit_text(
+                cb.message,
+                "📋 اختر القناة التي تريد نشر الفعالية فيها:",
+                reply_markup=select_channel_kb(items),
             )
         else:
             channel_id = links[0].channel_id
             await state.update_data(channel_id=channel_id)
             await state.set_state(CreateRoulette.await_text)
-            await safe_edit_text(cb.message,
+            await safe_edit_text(
+                cb.message,
                 "📝 أرسل نص كليشة المسابقة.\nمثال الأنماط: #عريض نص #عريض أو #تشويش نص #تشويش",
                 reply_markup=back_kb(),
             )
@@ -212,9 +215,7 @@ async def unlink_channel(cb: CallbackQuery) -> None:
         rows = []
         for link in links:
             label = link.channel_title or str(link.channel_id)
-            rows.append(
-                [InlineKeyboardButton(text=label, callback_data=f"unlinkch:{link.channel_id}")]
-            )
+            rows.append([InlineKeyboardButton(text=label, callback_data=f"unlinkch:{link.channel_id}")])
         rows.append([InlineKeyboardButton(text="🔙 رجوع", callback_data="back")])
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
         await cb.message.answer("🗑️ اختر القناة المراد فك ارتباطها:", reply_markup=kb)
@@ -309,7 +310,8 @@ async def select_channel(cb: CallbackQuery, state: FSMContext) -> None:
     chat_id = int(cb.data.split(":")[1])
     await state.update_data(channel_id=chat_id)
     await state.set_state(CreateRoulette.await_text)
-    await safe_edit_text(cb.message,
+    await safe_edit_text(
+        cb.message,
         "📝 أرسل نص كليشة المسابقة.\nمثال الأنماط: #عريض نص #عريض أو #تشويش نص #تشويش",
         reply_markup=back_kb(),
     )
@@ -445,7 +447,8 @@ async def gate_type_select(cb: CallbackQuery, state: FSMContext) -> None:
                     ]
                 )
             rows.append([InlineKeyboardButton(text="🔙 رجوع", callback_data="back")])
-            await safe_edit_text(cb.message,
+            await safe_edit_text(
+                cb.message,
                 "📋 اختر المجموعة التي يجب أن يمتلك فيها المستخدم نقاط تفاعل:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             )
@@ -478,7 +481,8 @@ async def gate_type_select(cb: CallbackQuery, state: FSMContext) -> None:
                     ]
                 )
             rows.append([InlineKeyboardButton(text="🔙 رجوع", callback_data="back")])
-            await safe_edit_text(cb.message,
+            await safe_edit_text(
+                cb.message,
                 f"📋 اختر مسابقة الـ {'تصويت' if gtype == 'vote' else 'روليت'} المطلوبة:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             )
@@ -512,7 +516,9 @@ async def gate_yastahiq_selection(cb: CallbackQuery, state: FSMContext) -> None:
 
     from ..keyboards.common import gates_manage_kb
 
-    await safe_edit_text(cb.message, "🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
+    await safe_edit_text(
+        cb.message, "🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates))
+    )
     await cb.answer()
 
 
@@ -533,8 +539,8 @@ async def gate_event_selection(cb: CallbackQuery, state: FSMContext) -> None:
         await state.update_data(gate_channels=gates)
         from ..keyboards.common import gates_manage_kb
 
-        await safe_edit_text(cb.message,
-            "🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates))
+        await safe_edit_text(
+            cb.message, "🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates))
         )
 
     await cb.answer()
@@ -548,12 +554,16 @@ async def collect_gate_target_code(message: Message, state: FSMContext) -> None:
     # Validation of the code - search for it in the DB
     async for session in get_async_session():
         from ..db.models import ContestEntry
-        from sqlalchemy import select
-        stmt = select(ContestEntry.id, ContestEntry.contest_id).where(ContestEntry.unique_code == code)
+
+        stmt = select(ContestEntry.id, ContestEntry.contest_id).where(
+            ContestEntry.unique_code == code
+        )
         res = await session.execute(stmt)
         row = res.first()
         if not row:
-            await message.answer("❌ عذراً، لم يتم العثور على متسابق بهذا الرمز. يرجى التأكد من الرمز والمحاولة مجدداً.")
+            await message.answer(
+                "❌ عذراً، لم يتم العثور على متسابق بهذا الرمز. يرجى التأكد من الرمز والمحاولة مجدداً."
+            )
             return
 
         cid = row[1]
@@ -562,6 +572,7 @@ async def collect_gate_target_code(message: Message, state: FSMContext) -> None:
         await state.update_data(gate_channels=gates)
 
     from ..keyboards.common import gates_manage_kb
+
     await message.answer("🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
 
 
@@ -586,7 +597,9 @@ async def gate_pick_apply(cb: CallbackQuery, state: FSMContext) -> None:
 
     from ..keyboards.common import gates_manage_kb
 
-    await safe_edit_text(cb.message, "🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates)))
+    await safe_edit_text(
+        cb.message, "🛡️ تم إضافة الشرط بنجاح!", reply_markup=gates_manage_kb(len(gates))
+    )
     await cb.answer()
 
 
@@ -608,7 +621,9 @@ async def collect_vote_mode(cb: CallbackQuery, state: FSMContext) -> None:
     if mode in ["stars", "both"]:
         from ..keyboards.voting import star_ratio_kb
 
-        await safe_edit_text(cb.message, "⚖️ اختر معدل (نجمة مقابل أصوات):", reply_markup=star_ratio_kb())
+        await safe_edit_text(
+            cb.message, "⚖️ اختر معدل (نجمة مقابل أصوات):", reply_markup=star_ratio_kb()
+        )
     else:
         await state.set_state(CreateRoulette.await_winners)
         await safe_edit_text(cb.message, "🏆 كم عدد الفائزين المطلوب؟ (أرسل رقماً بين 1 و 100):")
@@ -698,7 +713,7 @@ async def toggle_settings(cb: CallbackQuery, state: FSMContext) -> None:
             data.get("exclude_leavers_enabled", True),
             data.get("prevent_multiple", False),
             is_vote,
-        )
+        ),
     )
     await cb.answer()
 
@@ -855,24 +870,25 @@ async def handle_join_request(cb: CallbackQuery, state: FSMContext) -> None:
             .scalars()
             .all()
         )
-        for gate in gates:
-            if not await sub_service.check_gate(cb.from_user.id, gate, session):
-                if gate.gate_type == "channel":
-                    await cb.message.answer(
-                        f"⚠️ يجب الانضمام لقناة: {gate.channel_title}\n{gate.invite_link}"
-                    )
-                elif gate.gate_type == "contest":
-                    await cb.message.answer(f"⚠️ يجب الانضمام للمسابقة رقم {gate.target_id} أولاً!")
-                elif gate.gate_type == "vote":
-                    await cb.message.answer(
-                        f"⚠️ يجب التصويت للمتسابق ذو الرمز {gate.target_code} في المسابقة {gate.target_id}!"
-                    )
-                elif gate.gate_type == "yastahiq":
-                    await cb.message.answer(
-                        "⚠️ يجب أن يكون لديك نقاط تفاعل في المجموعة لاستكمال هذا الشرط."
-                    )
-                await safe_answer(cb)
-                return
+        results = await sub_service.verify_all_gates(cb.from_user.id, gates, session)
+
+        # Monitor failures
+        from ..services.security import FailureMonitor
+
+        monitor = FailureMonitor(runtime.redis)
+        for r in results:
+            if r.error_type == "system_failure":
+                await monitor.report_failure(c.id, c.owner_id, r.gate.id, cb.bot)
+            elif r.is_passed:
+                await monitor.reset_failure(c.id, r.gate.id)
+
+        pending = [r for r in results if not r.is_passed]
+        if pending:
+            from .system import show_verification_interface
+
+            await show_verification_interface(cb, state, contest_id, None, results)
+            await safe_answer(cb)
+            return
 
         # Already joined?
         entry_repo = ContestEntryRepository(session)
@@ -895,9 +911,12 @@ async def handle_join_request(cb: CallbackQuery, state: FSMContext) -> None:
 
         # Finalize join
         prefix = "R"
-        if c.type == ContestType.VOTE: prefix = "V"
-        elif c.type == ContestType.YASTAHIQ: prefix = "Y"
-        elif c.type == ContestType.QUIZ: prefix = "Q"
+        if c.type == ContestType.VOTE:
+            prefix = "V"
+        elif c.type == ContestType.YASTAHIQ:
+            prefix = "Y"
+        elif c.type == ContestType.QUIZ:
+            prefix = "Q"
 
         code = f"{prefix}-{secrets.token_hex(4).upper()}"
         entry = ContestEntry(
@@ -927,9 +946,12 @@ async def handle_antibot_ans(cb: CallbackQuery, state: FSMContext) -> None:
         c = await session.get(Contest, contest_id)
         prefix = "R"
         if c:
-            if c.type == ContestType.VOTE: prefix = "V"
-            elif c.type == ContestType.YASTAHIQ: prefix = "Y"
-            elif c.type == ContestType.QUIZ: prefix = "Q"
+            if c.type == ContestType.VOTE:
+                prefix = "V"
+            elif c.type == ContestType.YASTAHIQ:
+                prefix = "Y"
+            elif c.type == ContestType.QUIZ:
+                prefix = "Q"
 
         code = f"{prefix}-{secrets.token_hex(4).upper()}"
         entry = ContestEntry(
@@ -1007,8 +1029,8 @@ async def gate_remove_handler(cb: CallbackQuery, state: FSMContext) -> None:
     if not gates:
         await safe_edit_text(cb.message, "🛡️ إضافة شرط جديد:", reply_markup=gate_add_menu_kb())
     else:
-        await safe_edit_text(cb.message,
-            "🛡️ إدارة الشروط المضافة:", reply_markup=gates_manage_kb(len(gates))
+        await safe_edit_text(
+            cb.message, "🛡️ إدارة الشروط المضافة:", reply_markup=gates_manage_kb(len(gates))
         )
 
 

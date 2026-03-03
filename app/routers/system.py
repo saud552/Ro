@@ -14,8 +14,8 @@ from aiogram.types import (
 from sqlalchemy import select
 
 from ..db import get_async_session
-from ..db.models import Contest, ContestEntry, ContestType, RouletteGate
-from ..db.repositories import AppSettingRepository, ContestEntryRepository
+from ..db.models import Contest, ContestType, RouletteGate
+from ..db.repositories import AppSettingRepository
 from ..services.subscription import GateStatus, SubscriptionService
 from ..utils.compat import safe_answer, safe_edit_text
 

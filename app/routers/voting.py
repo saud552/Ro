@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import logging
 import secrets
 from contextlib import suppress
 from datetime import datetime, timezone
@@ -9,7 +7,6 @@ from typing import Optional
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -22,10 +19,9 @@ from aiogram.types import (
 )
 from sqlalchemy import select
 
-from ..config import settings
 from ..db import get_async_session
-from ..db.models import Contest, ContestEntry, ContestType, RouletteGate
-from ..db.repositories import AppSettingRepository, ContestEntryRepository, UserRepository
+from ..db.models import Contest, RouletteGate
+from ..db.repositories import AppSettingRepository
 from ..keyboards.voting import (
     contestant_vote_kb,
     star_amounts_kb,
@@ -33,11 +29,10 @@ from ..keyboards.voting import (
 )
 from ..services.antibot import AntiBotService
 from ..services.context import runtime
-from ..services.formatting import StyledText
 from ..services.payments import PaymentType, log_purchase
 from ..services.subscription import SubscriptionService
 from ..services.voting import VotingService
-from ..utils.compat import safe_answer, safe_edit_markup, safe_edit_text
+from ..utils.compat import safe_answer, safe_edit_text
 
 voting_router = Router(name="voting")
 
@@ -50,7 +45,13 @@ class VotingFlow(StatesGroup):
 # --- Helpers ---
 
 
-async def _verify_vote_eligibility(cb: CallbackQuery, c: Contest, session, entry_id: Optional[int] = None, state: Optional[FSMContext] = None) -> bool:
+async def _verify_vote_eligibility(
+    cb: CallbackQuery,
+    c: Contest,
+    session,
+    entry_id: Optional[int] = None,
+    state: Optional[FSMContext] = None,
+) -> bool:
     """Check if the user satisfies all conditions and show interface if not."""
     from .system import show_verification_interface
     from ..services.security import FailureMonitor
@@ -65,13 +66,19 @@ async def _verify_vote_eligibility(cb: CallbackQuery, c: Contest, session, entry
     monitor = FailureMonitor(runtime.redis)
 
     if not c.sub_check_disabled:
-        passed, is_sys = await sub_service.is_member_safe(await sub_service.get_required_channel() or "telegram", cb.from_user.id)
+        passed, is_sys = await sub_service.is_member_safe(
+            await sub_service.get_required_channel() or "telegram", cb.from_user.id
+        )
         if not passed:
             # Simple error for forced sub for now, or could be a gate
             pass
 
     # 3. Custom Gates check
-    gates = (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id))).scalars().all()
+    gates = (
+        (await session.execute(select(RouletteGate).where(RouletteGate.contest_id == c.id)))
+        .scalars()
+        .all()
+    )
     results = await sub_service.verify_all_gates(cb.from_user.id, gates, session)
 
     # Handle system failures
@@ -220,7 +227,7 @@ async def handle_voting_antibot(cb: CallbackQuery, state: FSMContext) -> None:
 
 
 @voting_router.callback_query(F.data.startswith("vote_star_pre:"))
-async def handle_star_vote_pre(cb: CallbackQuery) -> None:
+async def handle_star_vote_pre(cb: CallbackQuery, state: FSMContext) -> None:
     parts = cb.data.split(":")
     contest_id = int(parts[1])
     entry_id = int(parts[2])
@@ -377,7 +384,7 @@ async def complete_registration(message: Message, state: FSMContext) -> None:
 
         entry = await service.register_contestant(c, message.from_user.id, name)
 
-        if c:
+        if entry:
             text = f"👤 المتسابق: <b>{name}</b>"
             kb = contestant_vote_kb(
                 contest_id,
@@ -473,7 +480,9 @@ async def handle_vote_draw(cb: CallbackQuery) -> None:
             winners.append(entry)
 
         if not winners:
-            await safe_answer(cb, "⚠️ لا يوجد متسابقون مستوفون للشروط (ربما غادر الجميع).", show_alert=True)
+            await safe_answer(
+                cb, "⚠️ لا يوجد متسابقون مستوفون للشروط (ربما غادر الجميع).", show_alert=True
+            )
             return
 
         winners_lines = [f"🎉 <b>نتائج مسابقة التصويت رقم {contest_id}:</b>\n"]

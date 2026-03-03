@@ -4,6 +4,7 @@ from contextlib import suppress
 from typing import List, Tuple
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
@@ -18,7 +19,7 @@ from ..keyboards.my import (
 )
 from ..services.context import runtime
 from ..services.formatting import StyledText
-from ..utils.compat import safe_answer, safe_edit_text
+from ..utils.compat import safe_edit_text
 
 my_router = Router(name="my")
 

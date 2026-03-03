@@ -1,6 +1,7 @@
 import random
-from typing import Any, List, Optional
 import time
+from typing import Any, List
+
 
 def draw_unique(population_indices: range, k: int) -> List[int]:
     """Securely pick k winners from the population."""
@@ -10,6 +11,7 @@ def draw_unique(population_indices: range, k: int) -> List[int]:
     if k >= len(pop_list):
         return pop_list
     return random.sample(pop_list, k)
+
 
 class FailureMonitor:
     """Monitors system failures for gates and alerts creators."""
@@ -49,7 +51,7 @@ class FailureMonitor:
                 )
                 try:
                     await bot.send_message(creator_id, alert_text, parse_mode="HTML")
-                except:
+                except Exception:
                     pass
 
     async def reset_failure(self, contest_id: int, gate_id: int):
