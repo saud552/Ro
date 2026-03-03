@@ -70,9 +70,9 @@ class SubscriptionService:
             status = GateStatus(
                 is_passed=passed,
                 gate=gate,
-                error_type="system_failure"
-                if is_sys_error
-                else ("user_failure" if not passed else None),
+                error_type=(
+                    "system_failure" if is_sys_error else ("user_failure" if not passed else None)
+                ),
             )
             results.append(status)
         return results

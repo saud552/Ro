@@ -21,8 +21,10 @@ from ..utils.compat import safe_answer, safe_edit_text
 
 system_router = Router(name="system")
 
+
 class VerificationState(StatesGroup):
     pending = State()
+
 
 def get_verification_kb(gates: List[GateStatus]) -> InlineKeyboardMarkup:
     """Build keyboard for pending tasks."""
@@ -46,7 +48,14 @@ def get_verification_kb(gates: List[GateStatus]) -> InlineKeyboardMarkup:
     buttons.append([InlineKeyboardButton(text="إلغاء ❌", callback_data="verify_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-async def show_verification_interface(cb: CallbackQuery, state: FSMContext, contest_id: int, entry_id: Optional[int], gates: List[GateStatus]):
+
+async def show_verification_interface(
+    cb: CallbackQuery,
+    state: FSMContext,
+    contest_id: int,
+    entry_id: Optional[int],
+    gates: List[GateStatus],
+):
     """Show the verification UI to the user."""
     await state.set_state(VerificationState.pending)
     await state.update_data(v_cid=contest_id, v_eid=entry_id)
@@ -59,6 +68,7 @@ async def show_verification_interface(cb: CallbackQuery, state: FSMContext, cont
     )
     kb = get_verification_kb(gates)
     await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+
 
 @system_router.callback_query(VerificationState.pending, F.data == "verify_check")
 async def handle_verify_check(cb: CallbackQuery, state: FSMContext):
@@ -87,16 +97,19 @@ async def handle_verify_check(cb: CallbackQuery, state: FSMContext):
                 # If it's registration
                 if entry_id is None:
                     from .voting import start_registration
+
                     cb.data = f"reg_contest:{contest_id}"
                     await start_registration(cb, state)
                 else:
                     # If it's voting
                     from .voting import handle_normal_vote
+
                     cb.data = f"vote_norm:{contest_id}:{entry_id}"
                     await handle_normal_vote(cb, state)
             else:
                 # Roulette join
                 from .roulette import handle_join_request
+
                 cb.data = f"join:{contest_id}"
                 await handle_join_request(cb, state)
             return
@@ -108,9 +121,13 @@ async def handle_verify_check(cb: CallbackQuery, state: FSMContext):
         # Refresh interface
         await show_verification_interface(cb, state, contest_id, entry_id, results)
 
+
 @system_router.callback_query(VerificationState.pending, F.data == "verify_cancel")
 async def handle_verify_cancel(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     from ..keyboards.common import main_menu_kb
-    await safe_edit_text(cb.message, "❌ تم إلغاء العملية والعودة للبداية.", reply_markup=main_menu_kb())
+
+    await safe_edit_text(
+        cb.message, "❌ تم إلغاء العملية والعودة للبداية.", reply_markup=main_menu_kb()
+    )
     await cb.answer()

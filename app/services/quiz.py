@@ -118,7 +118,12 @@ class QuizService:
             if is_first:
                 entry = await self.entry_repo.get_entry(contest_id, user_id)
                 if not entry:
-                    entry = ContestEntry(contest_id=contest_id, user_id=user_id, score=0, unique_code=f"Q-{secrets.token_hex(4).upper()}")
+                    entry = ContestEntry(
+                        contest_id=contest_id,
+                        user_id=user_id,
+                        score=0,
+                        unique_code=f"Q-{secrets.token_hex(4).upper()}",
+                    )
                     self.session.add(entry)
                     await self.session.flush()
 

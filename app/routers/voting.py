@@ -53,8 +53,8 @@ async def _verify_vote_eligibility(
     state: Optional[FSMContext] = None,
 ) -> bool:
     """Check if the user satisfies all conditions and show interface if not."""
-    from .system import show_verification_interface
     from ..services.security import FailureMonitor
+    from .system import show_verification_interface
 
     # 1. Premium Only check
     if c.is_premium_only and not cb.from_user.is_premium:
@@ -123,7 +123,9 @@ async def handle_entry_view(cb: CallbackQuery, state: Optional[FSMContext] = Non
             f"⭐️ دعم النجوم: <b>{entry.stars_received}</b>\n\n"
             f"اختر طريقة التصويت المتاحة:"
         )
-        kb = voting_selection_kb(contest_id, entry_id, c.vote_mode.value if c.vote_mode else "normal")
+        kb = voting_selection_kb(
+            contest_id, entry_id, c.vote_mode.value if c.vote_mode else "normal"
+        )
         await safe_edit_text(cb.message, text, reply_markup=kb, parse_mode=ParseMode.HTML)
     await safe_answer(cb)
 

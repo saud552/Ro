@@ -36,12 +36,7 @@ class YastahiqService:
             # For Yastahiq, usually multiple comments are allowed, but for Gates we just need 1 record.
 
             # Record the vote properly
-            vote = Vote(
-                contest_id=contest_id,
-                entry_id=entry.id,
-                voter_id=voter_id,
-                is_stars=False
-            )
+            vote = Vote(contest_id=contest_id, entry_id=entry.id, voter_id=voter_id, is_stars=False)
             self.session.add(vote)
 
             entry.votes_count += 1
@@ -58,12 +53,7 @@ class YastahiqService:
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()
         if entry:
-            vote = Vote(
-                contest_id=contest_id,
-                entry_id=entry.id,
-                voter_id=voter_id,
-                is_stars=False
-            )
+            vote = Vote(contest_id=contest_id, entry_id=entry.id, voter_id=voter_id, is_stars=False)
             self.session.add(vote)
 
             entry.votes_count += 1

@@ -210,7 +210,8 @@ async def section_store(cb: CallbackQuery) -> None:
 
 @sections_router.callback_query(F.data == "main_menu")
 async def back_to_main(cb: CallbackQuery) -> None:
-    await safe_edit_text(cb.message,
+    await safe_edit_text(
+        cb.message,
         "يرجى اختيار القسم المطلوب من القائمة أدناه:",
         reply_markup=main_menu_kb(),
     )
