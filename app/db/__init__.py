@@ -7,3 +7,17 @@ from .models import Notification as Notification
 from .models import Participant as Participant
 from .models import Roulette as Roulette
 from .models import User as User
+from .models import (
+    Subscription,
+    VotingContest,
+    VotingCandidate,
+    VotingVote,
+    DeservesContest,
+    DeservesCandidate,
+    DeservesVote,
+    QuizContest,
+    QuizQuestion,
+    QuizAnswer,
+    QuizParticipantScore,
+    Referral,
+)
