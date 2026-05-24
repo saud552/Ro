@@ -82,7 +82,9 @@ class FeatureAccessRepository:
     async def grant_one_time(self, user_id: int, feature_key: str, *, credits: int = 1) -> None:
         fa = await self.get_user_feature_access(user_id, feature_key)
         if fa is None:
-            fa = FeatureAccess(user_id=user_id, feature_key=feature_key, expires_at=None, one_time_credits=credits)
+            fa = FeatureAccess(
+                user_id=user_id, feature_key=feature_key, expires_at=None, one_time_credits=credits
+            )
             self._session.add(fa)
         else:
             fa.one_time_credits += credits
@@ -105,7 +107,9 @@ class SubscriptionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def create(self, user_id: int, subscription_type: str, referral_code: str) -> Subscription:
+    async def create(
+        self, user_id: int, subscription_type: str, referral_code: str
+    ) -> Subscription:
         sub = Subscription(
             user_id=user_id,
             subscription_type=subscription_type,
@@ -402,7 +406,9 @@ class QuizRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_next_question(self, contest_id: int, current_number: int) -> Optional[QuizQuestion]:
+    async def get_next_question(
+        self, contest_id: int, current_number: int
+    ) -> Optional[QuizQuestion]:
         result = await self._session.execute(
             select(QuizQuestion).where(
                 QuizQuestion.contest_id == contest_id,
@@ -422,7 +428,9 @@ class QuizRepository:
 
         # Check if correct
         question = await self.get_question(question_id)
-        is_correct = question and question.correct_answer.strip().lower() == answer_text.strip().lower()
+        is_correct = (
+            question and question.correct_answer.strip().lower() == answer_text.strip().lower()
+        )
 
         answer = QuizAnswer(
             contest_id=contest_id,

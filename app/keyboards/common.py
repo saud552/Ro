@@ -89,7 +89,11 @@ def gate_add_menu_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="إضافة قناة كشرط", callback_data="gate_add_channel")],
             [InlineKeyboardButton(text="إضافة مجموعة كشرط", callback_data="gate_add_group")],
-            [InlineKeyboardButton(text="اختيار من قائمة القنوات/المجموعات", callback_data="gate_pick")],
+            [
+                InlineKeyboardButton(
+                    text="اختيار من قائمة القنوات/المجموعات", callback_data="gate_pick"
+                )
+            ],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
     )
@@ -116,15 +120,10 @@ def subscription_gate_kb(channel_username: str) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="✅ اشتراك في قناة البوت",
-                    url=f"https://t.me/{channel_username.lstrip('@')}"
+                    url=f"https://t.me/{channel_username.lstrip('@')}",
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    text="🔄 تحقق من الاشتراك",
-                    callback_data="check_subscription"
-                )
-            ],
+            [InlineKeyboardButton(text="🔄 تحقق من الاشتراك", callback_data="check_subscription")],
         ]
     )
 
@@ -143,7 +142,9 @@ def subscription_menu_kb() -> InlineKeyboardMarkup:
 
 
 # ملخص: عرض حالة الاشتراك مع تفاصيل.
-def subscription_status_kb(has_access: bool, access_type: str, expires_at: str) -> InlineKeyboardMarkup:
+def subscription_status_kb(
+    has_access: bool, access_type: str, expires_at: str
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔄 تجديد الاشتراك", callback_data="sub_renew")],

@@ -108,7 +108,9 @@ async def _get_user_channel_id(user_id: int) -> Optional[int]:
 def _build_channel_post_text(r: Roulette, participants_count: int) -> str:
     """Compose channel post text with styling, status line, and participants count."""
     styled = StyledText(r.text_raw, r.text_style).render()
-    status_line = "المشاركة في السحب متاحة حالياً" if r.is_open else "المشاركة في السحب متوقفة حالياً"
+    status_line = (
+        "المشاركة في السحب متاحة حالياً" if r.is_open else "المشاركة في السحب متوقفة حالياً"
+    )
     return f"{styled}\n\n{status_line}\nعدد المشاركين: {participants_count}"
 
 
@@ -608,7 +610,10 @@ async def add_gate_forwarded(message: Message, state: FSMContext) -> None:
     expected = data.get("sub_view")
     if expected == "gate_add_channel" and str(getattr(chat, "type", "")) != "channel":
         return
-    if expected == "gate_add_group" and str(getattr(chat, "type", "")) not in {"group", "supergroup"}:
+    if expected == "gate_add_group" and str(getattr(chat, "type", "")) not in {
+        "group",
+        "supergroup",
+    }:
         return
     channel = chat
     # Verify sender and bot are admins in gate channel
@@ -649,7 +654,11 @@ async def add_gate_forwarded(message: Message, state: FSMContext) -> None:
     )
     await state.update_data(gate_channels=gates)
     await message.answer(
-        ("تمت إضافة قناة الشرط ✅" if str(getattr(channel, "type", "")) == "channel" else "تمت إضافة مجموعة الشرط ✅"),
+        (
+            "تمت إضافة قناة الشرط ✅"
+            if str(getattr(channel, "type", "")) == "channel"
+            else "تمت إضافة مجموعة الشرط ✅"
+        ),
         reply_markup=gates_manage_kb(len(gates)),
     )
 
@@ -710,14 +719,18 @@ async def add_gate_link(message: Message, state: FSMContext) -> None:
         c = await message.bot.get_chat(identifier)
         ctype = str(getattr(c, "type", ""))
         if sub_view == "gate_add_channel" and ctype != "channel":
-            await message.answer("الرجاء إرسال قناة عامة صحيحة (@username) أو تحويل رسالة من القناة الخاصة.")
+            await message.answer(
+                "الرجاء إرسال قناة عامة صحيحة (@username) أو تحويل رسالة من القناة الخاصة."
+            )
             return
         if sub_view == "gate_add_group" and ctype not in {"group", "supergroup"}:
             await message.answer("الرجاء إرسال رابط مجموعة صحيح أو تحويل رسالة من المجموعة.")
             return
         m_user = await message.bot.get_chat_member(c.id, message.from_user.id)
         if getattr(m_user, "status", None) not in {"creator", "administrator"}:
-            await message.answer("يجب أن تكون مشرفاً ومنحت الصلاحيات اللازمة لإضافة هذا الوجهة كشرط")
+            await message.answer(
+                "يجب أن تكون مشرفاً ومنحت الصلاحيات اللازمة لإضافة هذا الوجهة كشرط"
+            )
             return
         if runtime.bot_id is not None:
             m_bot = await message.bot.get_chat_member(c.id, runtime.bot_id)
@@ -737,7 +750,9 @@ async def add_gate_link(message: Message, state: FSMContext) -> None:
         inv = await message.bot.create_chat_invite_link(chat_id=c.id, creates_join_request=False)
         invite_link = getattr(inv, "invite_link", None)
     gates = list(data.get("gate_channels", []))
-    title = getattr(c, "title", None) or (f"Channel {c.id}" if ctype == "channel" else f"Group {c.id}")
+    title = getattr(c, "title", None) or (
+        f"Channel {c.id}" if ctype == "channel" else f"Group {c.id}"
+    )
     gates.append({"channel_id": c.id, "channel_title": title, "invite_link": invite_link})
     await state.update_data(gate_channels=gates)
     await message.answer(
@@ -1045,9 +1060,7 @@ async def confirm_create_cb(cb: CallbackQuery, state: FSMContext) -> None:
         post = await cb.bot.send_message(
             r.channel_id,
             post_text,
-            reply_markup=roulette_controls_kb(
-                r.id, True, runtime.bot_username, gate_links, False
-            ),
+            reply_markup=roulette_controls_kb(r.id, True, runtime.bot_username, gate_links, False),
             parse_mode=ParseMode.HTML,
         )
         r.channel_message_id = post.message_id
@@ -1077,7 +1090,8 @@ async def confirm_help(message: Message) -> None:
         # إرسال رسالة تأكيد واضحة
         await message.answer("✅ تم التأكيد! جاري إنشاء السحب...")
         # إرسال زر تأكيد للمستخدم
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
         confirm_kb = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="تأكيد", callback_data="confirm_create")]]
         )
@@ -1301,7 +1315,10 @@ async def draw(cb: CallbackQuery) -> None:
         # ملخص: يمنع البدء المتعدد المتزامن عبر قفل بسيط داخل العملية.
         lock_key = f"draw_lock:{roulette_id}"
         if _inproc_locks.get(lock_key):
-            await cb.answer("⏳ السحب قيد التنفيذ حالياً، يرجى الانتظار حتى يكتمل إعلان الفائزين.", show_alert=True)
+            await cb.answer(
+                "⏳ السحب قيد التنفيذ حالياً، يرجى الانتظار حتى يكتمل إعلان الفائزين.",
+                show_alert=True,
+            )
             return
         _inproc_locks[lock_key] = True
         try:
@@ -1313,7 +1330,9 @@ async def draw(cb: CallbackQuery) -> None:
                 return
             # قفل على مستوى قاعدة البيانات لمنع البدء المتكرر عبر عمليات متعددة
             from sqlalchemy.exc import IntegrityError as _SAIntegrityError
+
             from ..db.models import AppSetting as _AppSetting
+
             db_lock_key = f"draw:in_progress:{r.id}"
             try:
                 session.add(_AppSetting(key=db_lock_key, value="1"))
@@ -1321,7 +1340,10 @@ async def draw(cb: CallbackQuery) -> None:
             except _SAIntegrityError:
                 # قفل موجود بالفعل => يوجد سحب جارٍ
                 await session.rollback()
-                await cb.answer("⏳ السحب قيد التنفيذ حالياً، يرجى الانتظار حتى يكتمل إعلان الفائزين.", show_alert=True)
+                await cb.answer(
+                    "⏳ السحب قيد التنفيذ حالياً، يرجى الانتظار حتى يكتمل إعلان الفائزين.",
+                    show_alert=True,
+                )
                 return
             # authorize: owner or channel admin
             authorized = (r.owner_id == cb.from_user.id) or (
@@ -1338,28 +1360,29 @@ async def draw(cb: CallbackQuery) -> None:
             if r.closed_at is not None:
                 await cb.answer("✅ تم إجراء السحب مسبقاً لهذا الروليت.", show_alert=True)
                 return
-            
+
             # تحسين: فحص إضافي للتأكد من أن السحب لم يتم إجراؤه في عملية أخرى
-            if hasattr(r, '_draw_in_progress') and r._draw_in_progress:
+            if hasattr(r, "_draw_in_progress") and r._draw_in_progress:
                 await cb.answer("🔄 السحب قيد التنفيذ حالياً، يرجى الانتظار.", show_alert=True)
                 return
-            
+
             # تحسين: فحص إضافي في قاعدة البيانات للتأكد من عدم وجود سحب متزامن
             existing_draw = await session.execute(
-                select(Roulette).where(
-                    Roulette.id == r.id,
-                    Roulette.closed_at.is_not(None)
-                )
+                select(Roulette).where(Roulette.id == r.id, Roulette.closed_at.is_not(None))
             )
             if existing_draw.scalar_one_or_none():
                 await cb.answer("✅ تم إجراء السحب مسبقاً لهذا الروليت.", show_alert=True)
                 return
             # Ensure there are participants
             rows = (
-                await session.execute(
-                    select(Participant.user_id).where(Participant.roulette_id == r.id)
+                (
+                    await session.execute(
+                        select(Participant.user_id).where(Participant.roulette_id == r.id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             if len(rows) == 0:
                 await cb.answer("👥 لا يوجد أي مشاركين بعد", show_alert=True)
                 return
@@ -1436,7 +1459,7 @@ async def draw(cb: CallbackQuery) -> None:
                             f"🔗 رابط القناة: غير متاح\n\n"
                             f"💫 نتمنى لك التوفيق! 🎊"
                         )
-                    
+
                     # محاولة إرسال الإشعار مع معالجة أفضل للأخطاء
                     try:
                         await cb.bot.send_message(
@@ -1452,7 +1475,7 @@ async def draw(cb: CallbackQuery) -> None:
                             logger.warning(f"telegram error for uid={uid} rid={r.id}: {e}")
                     except Exception as e:
                         logger.warning(f"unexpected error notifying uid={uid} rid={r.id}: {e}")
-                        
+
                 except Exception as e:
                     logger.warning(f"notify winner failed uid={uid} rid={r.id}: {e}")
             # Post announcement: edit countdown message if exists; otherwise update original post
@@ -1489,7 +1512,7 @@ async def draw(cb: CallbackQuery) -> None:
                 # Notify owner about successful start
                 with suppress(Exception):
                     await cb.bot.send_message(r.owner_id, f"تم بدء السحب رقم {r.id} بنجاح.")
-                            # Mark closed time and update status
+                    # Mark closed time and update status
             r.closed_at = r.closed_at or datetime.utcnow()
             # تحسين: تحديث حالة السحب لمنع السحب المتعدد
             r.is_open = False  # إغلاق السحب نهائياً بعد إعلان الفائزين
@@ -1499,9 +1522,13 @@ async def draw(cb: CallbackQuery) -> None:
             _inproc_locks.pop(lock_key, None)
             with suppress(Exception):
                 from sqlalchemy import delete as _sqldelete
+
                 from ..db.models import AppSetting as _AppSetting2
+
                 await session.execute(
-                    _sqldelete(_AppSetting2).where(_AppSetting2.key == f"draw:in_progress:{roulette_id}")
+                    _sqldelete(_AppSetting2).where(
+                        _AppSetting2.key == f"draw:in_progress:{roulette_id}"
+                    )
                 )
                 await session.commit()
         await cb.answer("🎉 تم السحب وإعلان الفائزين بنجاح!")
