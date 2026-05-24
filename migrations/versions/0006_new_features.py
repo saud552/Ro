@@ -143,7 +143,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["deserves_contests.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["candidate_id"], ["deserves_candidates.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("contest_id", "candidate_id", "voter_id", name="uq_deserves_vote_unique"),
+        sa.UniqueConstraint(
+            "contest_id", "candidate_id", "voter_id", name="uq_deserves_vote_unique"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_deserves_votes_contest_id", "deserves_votes", ["contest_id"])
@@ -223,7 +225,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("contest_id", "user_id", name="uq_quiz_contest_user_score"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_quiz_participant_scores_contest_id", "quiz_participant_scores", ["contest_id"])
+    op.create_index(
+        "ix_quiz_participant_scores_contest_id", "quiz_participant_scores", ["contest_id"]
+    )
     op.create_index("ix_quiz_participant_scores_user_id", "quiz_participant_scores", ["user_id"])
 
     # Referrals

@@ -204,7 +204,9 @@ class VotingCandidate(Base):
     __tablename__ = "voting_candidates"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("voting_contests.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("voting_contests.id", ondelete="CASCADE"), index=True
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     display_name: Mapped[str] = mapped_column(String(256))
     channel_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -221,8 +223,12 @@ class VotingVote(Base):
     __tablename__ = "voting_votes"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("voting_contests.id", ondelete="CASCADE"), index=True)
-    candidate_id: Mapped[int] = mapped_column(ForeignKey("voting_candidates.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("voting_contests.id", ondelete="CASCADE"), index=True
+    )
+    candidate_id: Mapped[int] = mapped_column(
+        ForeignKey("voting_candidates.id", ondelete="CASCADE"), index=True
+    )
     voter_id: Mapped[int] = mapped_column(BigInteger, index=True)
     is_star_vote: Mapped[bool] = mapped_column(Boolean, default=False)
     stars_amount: Mapped[int] = mapped_column(Integer, default=0)
@@ -258,7 +264,9 @@ class DeservesCandidate(Base):
     __tablename__ = "deserves_candidates"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("deserves_contests.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("deserves_contests.id", ondelete="CASCADE"), index=True
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     display_name: Mapped[str] = mapped_column(String(256))
     vote_code: Mapped[str] = mapped_column(String(32), unique=True)
@@ -271,13 +279,19 @@ class DeservesVote(Base):
     __tablename__ = "deserves_votes"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("deserves_contests.id", ondelete="CASCADE"), index=True)
-    candidate_id: Mapped[int] = mapped_column(ForeignKey("deserves_candidates.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("deserves_contests.id", ondelete="CASCADE"), index=True
+    )
+    candidate_id: Mapped[int] = mapped_column(
+        ForeignKey("deserves_candidates.id", ondelete="CASCADE"), index=True
+    )
     voter_id: Mapped[int] = mapped_column(BigInteger, index=True)
     message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("contest_id", "candidate_id", "voter_id", name="uq_deserves_vote_unique"),)
+    __table_args__ = (
+        UniqueConstraint("contest_id", "candidate_id", "voter_id", name="uq_deserves_vote_unique"),
+    )
 
 
 # ملخص: مسابقات الأسئلة.
@@ -308,14 +322,18 @@ class QuizQuestion(Base):
     __tablename__ = "quiz_questions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("quiz_contests.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_contests.id", ondelete="CASCADE"), index=True
+    )
     question_number: Mapped[int] = mapped_column(Integer)
     text_raw: Mapped[str] = mapped_column(Text)
     correct_answer: Mapped[str] = mapped_column(String(256))
     time_limit: Mapped[int] = mapped_column(Integer, default=30)  # seconds
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint("contest_id", "question_number", name="uq_quiz_contest_question"),)
+    __table_args__ = (
+        UniqueConstraint("contest_id", "question_number", name="uq_quiz_contest_question"),
+    )
 
 
 # ملخص: إجابات المسابقة (للمشاركين).
@@ -323,16 +341,18 @@ class QuizAnswer(Base):
     __tablename__ = "quiz_answers"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("quiz_contests.id", ondelete="CASCADE"), index=True)
-    question_id: Mapped[int] = mapped_column(ForeignKey("quiz_questions.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_contests.id", ondelete="CASCADE"), index=True
+    )
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_questions.id", ondelete="CASCADE"), index=True
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     answer_text: Mapped[str] = mapped_column(String(256))
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
     answered_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    __table_args__ = (
-        UniqueConstraint("question_id", "user_id", name="uq_quiz_question_user"),
-    )
+    __table_args__ = (UniqueConstraint("question_id", "user_id", name="uq_quiz_question_user"),)
 
 
 # ملخص: درجات المشاركين في المسابقة.
@@ -340,7 +360,9 @@ class QuizParticipantScore(Base):
     __tablename__ = "quiz_participant_scores"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    contest_id: Mapped[int] = mapped_column(ForeignKey("quiz_contests.id", ondelete="CASCADE"), index=True)
+    contest_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_contests.id", ondelete="CASCADE"), index=True
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     score: Mapped[int] = mapped_column(Integer, default=0)
     correct_answers: Mapped[int] = mapped_column(Integer, default=0)

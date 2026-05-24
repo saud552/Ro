@@ -47,18 +47,26 @@ def voting_join_kb(vote_code: str) -> InlineKeyboardMarkup:
 
 
 # ملخص: أزرار التصويت.
-def voting_vote_kb(contest_id: int, candidate_id: int, stars_amount: int = 0) -> InlineKeyboardMarkup:
+def voting_vote_kb(
+    contest_id: int, candidate_id: int, stars_amount: int = 0
+) -> InlineKeyboardMarkup:
     rows = []
-    rows.append([
-        InlineKeyboardButton(text="✅ تصويتب", callback_data=f"vote_normal:{contest_id}:{candidate_id}"),
-    ])
-    if stars_amount > 0:
-        rows.append([
+    rows.append(
+        [
             InlineKeyboardButton(
-                text=f"⭐ تصويتب بنجمة ({stars_amount} ⭐)",
-                callback_data=f"vote_stars:{contest_id}:{candidate_id}:{stars_amount}"
+                text="✅ تصويتب", callback_data=f"vote_normal:{contest_id}:{candidate_id}"
             ),
-        ])
+        ]
+    )
+    if stars_amount > 0:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"⭐ تصويتب بنجمة ({stars_amount} ⭐)",
+                    callback_data=f"vote_stars:{contest_id}:{candidate_id}:{stars_amount}",
+                ),
+            ]
+        )
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -67,36 +75,57 @@ def voting_vote_kb(contest_id: int, candidate_id: int, stars_amount: int = 0) ->
 def voting_controls_kb(contest_id: int, is_active: bool) -> InlineKeyboardMarkup:
     rows = []
     if is_active:
-        rows.append([InlineKeyboardButton(text="🔴 إنهاء المسابقة", callback_data=f"voting_end:{contest_id}")])
-    rows.append([InlineKeyboardButton(text="📊 عرض النتائج", callback_data=f"voting_results:{contest_id}")])
-    rows.append([InlineKeyboardButton(text="🗑️ حذف المسابقة", callback_data=f"voting_delete:{contest_id}")])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🔴 إنهاء المسابقة", callback_data=f"voting_end:{contest_id}"
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="📊 عرض النتائج", callback_data=f"voting_results:{contest_id}")]
+    )
+    rows.append(
+        [InlineKeyboardButton(text="🗑️ حذف المسابقة", callback_data=f"voting_delete:{contest_id}")]
+    )
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 # ملخص: أزرار تصويت النجوم.
-def voting_stars_payment_kb(contest_id: int, candidate_id: int, stars_amount: int) -> InlineKeyboardMarkup:
+def voting_stars_payment_kb(
+    contest_id: int, candidate_id: int, stars_amount: int
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(
-                text=f"⭐ صوّت بـ {stars_amount} نجمة",
-                callback_data=f"voting_pay_stars:{contest_id}:{candidate_id}:{stars_amount}"
-            )],
-            [InlineKeyboardButton(text="تصويتب مجاني", callback_data=f"vote_normal:{contest_id}:{candidate_id}")],
+            [
+                InlineKeyboardButton(
+                    text=f"⭐ صوّت بـ {stars_amount} نجمة",
+                    callback_data=f"voting_pay_stars:{contest_id}:{candidate_id}:{stars_amount}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="تصويتب مجاني", callback_data=f"vote_normal:{contest_id}:{candidate_id}"
+                )
+            ],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
     )
 
 
 # ملخص: عرض قائمة المتسابقين.
-def voting_candidates_kb(contest_id: int, candidates: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+def voting_candidates_kb(
+    contest_id: int, candidates: list[tuple[int, str]]
+) -> InlineKeyboardMarkup:
     rows = []
     for candidate_id, display_name in candidates:
-        rows.append([
-            InlineKeyboardButton(
-                text=display_name,
-                callback_data=f"voting_candidate:{contest_id}:{candidate_id}"
-            )
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=display_name, callback_data=f"voting_candidate:{contest_id}:{candidate_id}"
+                )
+            ]
+        )
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

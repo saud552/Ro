@@ -15,7 +15,6 @@ from ..keyboards.common import (
     gate_kb,
     start_menu_kb,
     subscription_menu_kb,
-    subscription_status_kb,
 )
 from ..services.context import runtime
 from ..services.payments import grant_monthly, grant_one_time, has_gate_access
@@ -62,12 +61,12 @@ async def handle_start(message: Message, state: FSMContext) -> None:
         )
         return
     args = (message.text or "").split(maxsplit=1)
-    
+
     # Handle referral link
     if len(args) == 2 and args[1].startswith("ref_"):
         referral_code = args[1].split("_", 1)[1]
         await _handle_referral(message.from_user.id, referral_code)
-    
+
     # Handle notify link
     if len(args) == 2 and args[1].startswith("notify-"):
         try:
@@ -92,12 +91,12 @@ async def handle_start(message: Message, state: FSMContext) -> None:
                     await session.commit()
             await message.answer("تم تفعيل التنبيه لهذا السحب ✅")
             return
-    
+
     # Deep-link to open my draws from start parameter
     if len(args) == 2 and args[1].strip().lower() == "my":
         await my_draws_command(message)
         return
-    
+
     await message.answer(
         "حياك الله في روليت سحوبات\nاختر من القائمة:",
         reply_markup=start_menu_kb(),
@@ -106,24 +105,26 @@ async def handle_start(message: Message, state: FSMContext) -> None:
 
 async def _handle_referral(user_id: int, referral_code: str) -> None:
     """Handle referral sign-up."""
-    from ..db.repositories import PointsRepository, SubscriptionRepository
-    
+    from ..db.repositories import PointsRepository
+
     async for session in get_async_session():
         # Find referrer by code
         from sqlalchemy import select
+
         from ..db.models import Subscription
-        
+
         result = await session.execute(
             select(Subscription).where(Subscription.referral_code == referral_code)
         )
         referrer = result.scalar_one_or_none()
-        
+
         if referrer:
             # Update referrer's points
             referrer.referral_points += 10
-            
+
             # Create referral record
             from ..db.repositories import PointsRepository
+
             repo = PointsRepository(session)
             await repo.create_referral(
                 referrer_id=referrer.user_id,
@@ -146,18 +147,19 @@ async def check_subscription(cb: CallbackQuery) -> None:
 @start_router.callback_query(F.data == "manage_subscription")
 async def manage_subscription(cb: CallbackQuery) -> None:
     user_id = cb.from_user.id
-    
+
     from ..db import get_async_session
     from ..db.repositories import FeatureAccessRepository, SubscriptionRepository
-    from datetime import datetime
-    
+
     async for session in get_async_session():
         fa_repo = FeatureAccessRepository(session)
         sub_repo = SubscriptionRepository(session)
-        
-        has_access = await fa_repo.has_gate_access(user_id, "roulette_one_time", consume_one_time=False)
+
+        has_access = await fa_repo.has_gate_access(
+            user_id, "roulette_one_time", consume_one_time=False
+        )
         sub = await sub_repo.get_by_user_id(user_id)
-        
+
         if sub:
             access_type = sub.subscription_type
             expires = sub.expires_at.strftime("%Y-%m-%d") if sub.expires_at else "غير محدود"
@@ -168,7 +170,7 @@ async def manage_subscription(cb: CallbackQuery) -> None:
             expires = "-"
             credits = 0
             points = 0
-        
+
         text = (
             "💰 إدارة الاشتراك\n\n"
             f"📊 الحالة: {'مشترك 💎' if has_access else 'مجاني ⭐'}\n"
@@ -178,7 +180,7 @@ async def manage_subscription(cb: CallbackQuery) -> None:
             f"⭐ النقاط: {points}\n\n"
             "اختر:"
         )
-    
+
     await cb.message.edit_text(text, reply_markup=subscription_menu_kb())
     await cb.answer()
 

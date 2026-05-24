@@ -30,7 +30,11 @@ def deserves_confirm_kb() -> InlineKeyboardMarkup:
 def deserves_join_kb(vote_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👏 أنا مستحق!", callback_data=f"deserves_join:{vote_code}")],
+            [
+                InlineKeyboardButton(
+                    text="👏 أنا مستحق!", callback_data=f"deserves_join:{vote_code}"
+                )
+            ],
         ]
     )
 
@@ -39,9 +43,23 @@ def deserves_join_kb(vote_code: str) -> InlineKeyboardMarkup:
 def deserves_controls_kb(contest_id: int, is_active: bool) -> InlineKeyboardMarkup:
     rows = []
     if is_active:
-        rows.append([InlineKeyboardButton(text="🔴 إنهاء المسابقة", callback_data=f"deserves_end:{contest_id}")])
-    rows.append([InlineKeyboardButton(text="📊 عرض النتائج", callback_data=f"deserves_results:{contest_id}")])
-    rows.append([InlineKeyboardButton(text="🗑️ حذف", callback_data=f"deserves_delete:{contest_id}")])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🔴 إنهاء المسابقة", callback_data=f"deserves_end:{contest_id}"
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="📊 عرض النتائج", callback_data=f"deserves_results:{contest_id}"
+            )
+        ]
+    )
+    rows.append(
+        [InlineKeyboardButton(text="🗑️ حذف", callback_data=f"deserves_delete:{contest_id}")]
+    )
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -50,7 +68,12 @@ def deserves_controls_kb(contest_id: int, is_active: bool) -> InlineKeyboardMark
 def deserves_candidate_kb(contest_id: int, candidate_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👏 صوّت لهذا المتسابق", callback_data=f"deserves_vote:{contest_id}:{candidate_id}")],
+            [
+                InlineKeyboardButton(
+                    text="👏 صوّت لهذا المتسابق",
+                    callback_data=f"deserves_vote:{contest_id}:{candidate_id}",
+                )
+            ],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
     )

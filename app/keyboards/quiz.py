@@ -28,17 +28,35 @@ def quiz_confirm_kb() -> InlineKeyboardMarkup:
 
 
 # ملخص: أزرار التحكم في المسابقة (للأدمن).
-def quiz_controls_kb(contest_id: int, is_active: bool, is_paused: bool = False) -> InlineKeyboardMarkup:
+def quiz_controls_kb(
+    contest_id: int, is_active: bool, is_paused: bool = False
+) -> InlineKeyboardMarkup:
     rows = []
     if is_active:
         if is_paused:
-            rows.append([InlineKeyboardButton(text="▶️ استئناف", callback_data=f"quiz_resume:{contest_id}")])
+            rows.append(
+                [InlineKeyboardButton(text="▶️ استئناف", callback_data=f"quiz_resume:{contest_id}")]
+            )
         else:
-            rows.append([InlineKeyboardButton(text="⏸️ إيقاف مؤقت", callback_data=f"quiz_pause:{contest_id}")])
-        rows.append([InlineKeyboardButton(text="⏭️ سؤال التالي", callback_data=f"quiz_next:{contest_id}")])
-        rows.append([InlineKeyboardButton(text="🔴 إنهاء المسابقة", callback_data=f"quiz_end:{contest_id}")])
-    rows.append([InlineKeyboardButton(text="📊 عرض النتائج", callback_data=f"quiz_results:{contest_id}")])
-    rows.append([InlineKeyboardButton(text="🗑️ حذف المسابقة", callback_data=f"quiz_delete:{contest_id}")])
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="⏸️ إيقاف مؤقت", callback_data=f"quiz_pause:{contest_id}"
+                    )
+                ]
+            )
+        rows.append(
+            [InlineKeyboardButton(text="⏭️ سؤال التالي", callback_data=f"quiz_next:{contest_id}")]
+        )
+        rows.append(
+            [InlineKeyboardButton(text="🔴 إنهاء المسابقة", callback_data=f"quiz_end:{contest_id}")]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="📊 عرض النتائج", callback_data=f"quiz_results:{contest_id}")]
+    )
+    rows.append(
+        [InlineKeyboardButton(text="🗑️ حذف المسابقة", callback_data=f"quiz_delete:{contest_id}")]
+    )
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -56,13 +74,20 @@ def quiz_join_kb(contest_id: int) -> InlineKeyboardMarkup:
 def quiz_answer_kb(contest_id: int, question_id: int, options: list[str]) -> InlineKeyboardMarkup:
     rows = []
     for i, option in enumerate(options):
-        rows.append([
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=option, callback_data=f"quiz_answer:{contest_id}:{question_id}:{i}"
+                )
+            ]
+        )
+    rows.append(
+        [
             InlineKeyboardButton(
-                text=option,
-                callback_data=f"quiz_answer:{contest_id}:{question_id}:{i}"
+                text="⚠️ لا أعرف", callback_data=f"quiz_skip:{contest_id}:{question_id}"
             )
-        ])
-    rows.append([InlineKeyboardButton(text="⚠️ لا أعرف", callback_data=f"quiz_skip:{contest_id}:{question_id}")])
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -71,7 +96,11 @@ def quiz_result_kb(contest_id: int, correct: bool) -> InlineKeyboardMarkup:
     text = "🎉 إجابة صحيحة!" if correct else "❌ إجابة خاطئة"
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=text, callback_data=f"quiz_result:{contest_id}:{1 if correct else 0}")],
+            [
+                InlineKeyboardButton(
+                    text=text, callback_data=f"quiz_result:{contest_id}:{1 if correct else 0}"
+                )
+            ],
             [InlineKeyboardButton(text="الترتيب", callback_data=f"quiz_leaderboard:{contest_id}")],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
@@ -82,8 +111,16 @@ def quiz_result_kb(contest_id: int, correct: bool) -> InlineKeyboardMarkup:
 def quiz_leaderboard_kb(contest_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📊 عرض المتصدرين", callback_data=f"quiz_leaderboard:{contest_id}")],
-            [InlineKeyboardButton(text="🎯 السؤال التالي", callback_data=f"quiz_next_question:{contest_id}")],
+            [
+                InlineKeyboardButton(
+                    text="📊 عرض المتصدرين", callback_data=f"quiz_leaderboard:{contest_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🎯 السؤال التالي", callback_data=f"quiz_next_question:{contest_id}"
+                )
+            ],
             [InlineKeyboardButton(text="رجوع", callback_data="back")],
         ]
     )

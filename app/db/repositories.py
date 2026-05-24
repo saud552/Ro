@@ -272,7 +272,7 @@ class DeservesRepository:
         result = await self._session.execute(
             select(DeservesContest).where(
                 DeservesContest.group_id == group_id,
-                DeservesContest.is_active == True,
+                DeservesContest.is_active.is_(True),
             )
         )
         return result.scalar_one_or_none()

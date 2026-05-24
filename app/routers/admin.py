@@ -37,10 +37,22 @@ def admin_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="📊 الاحصائيات", callback_data="admin_stats")],
             [InlineKeyboardButton(text="📢 الاذاعة (قريباً)", callback_data="admin_broadcast")],
             [InlineKeyboardButton(text="💰 تعيين قيمة الاشتراك", callback_data="admin_set_prices")],
-            [InlineKeyboardButton(text="🔗 تعيين قناة البوت الأساسية", callback_data="admin_set_bot_channel")],
-            [InlineKeyboardButton(text="🗳️ إعدادات التصويتب", callback_data="admin_voting_settings")],
+            [
+                InlineKeyboardButton(
+                    text="🔗 تعيين قناة البوت الأساسية", callback_data="admin_set_bot_channel"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🗳️ إعدادات التصويتب", callback_data="admin_voting_settings"
+                )
+            ],
             [InlineKeyboardButton(text="❓ إدارة الأسئلة", callback_data="admin_questions")],
-            [InlineKeyboardButton(text="🎁 إعدادات الإحالة", callback_data="admin_referral_settings")],
+            [
+                InlineKeyboardButton(
+                    text="🎁 إعدادات الإحالة", callback_data="admin_referral_settings"
+                )
+            ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="back")],
         ]
     )
@@ -61,8 +73,16 @@ def prices_kb() -> InlineKeyboardMarkup:
 def voting_settings_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ تفعيل/تعطيل التصويتب", callback_data="admin_voting_toggle")],
-            [InlineKeyboardButton(text="💰 سعر التصويتب بالنجوم", callback_data="admin_voting_price")],
+            [
+                InlineKeyboardButton(
+                    text="✅ تفعيل/تعطيل التصويتب", callback_data="admin_voting_toggle"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💰 سعر التصويتب بالنجوم", callback_data="admin_voting_price"
+                )
+            ],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="admin_back")],
         ]
     )
@@ -83,7 +103,11 @@ def questions_admin_kb() -> InlineKeyboardMarkup:
 def referral_settings_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ تفعيل/تعطيل الإحالة", callback_data="admin_referral_toggle")],
+            [
+                InlineKeyboardButton(
+                    text="✅ تفعيل/تعطيل الإحالة", callback_data="admin_referral_toggle"
+                )
+            ],
             [InlineKeyboardButton(text="💰 نقاط كل إحالة", callback_data="admin_referral_points")],
             [InlineKeyboardButton(text="🔙 رجوع", callback_data="admin_back")],
         ]
@@ -233,7 +257,7 @@ async def admin_price_set_value(message: Message, state: FSMContext) -> None:
     value = int(message.text)
     data = await state.get_data()
     mode = data.get("price_mode", "price_once")
-    
+
     async for session in get_async_session():
         # Map modes to setting keys
         mode_keys = {
@@ -244,7 +268,7 @@ async def admin_price_set_value(message: Message, state: FSMContext) -> None:
             "referral_points": "referral_points_per",
         }
         actual_key = mode_keys.get(mode, "price_once_value")
-        
+
         row = (
             await session.execute(select(AppSetting).where(AppSetting.key == actual_key))
         ).scalar_one_or_none()
@@ -253,9 +277,9 @@ async def admin_price_set_value(message: Message, state: FSMContext) -> None:
         else:
             session.add(AppSetting(key=actual_key, value=str(value)))
         await session.commit()
-    
+
     await state.clear()
-    
+
     # Acknowledge free-tier if price is 0
     if value == 0:
         await message.answer(
@@ -370,20 +394,21 @@ async def admin_questions_list(cb: CallbackQuery) -> None:
         await cb.answer()
         return
     from sqlalchemy import select
+
     from ..db.models import QuizQuestion
-    
+
     async for session in get_async_session():
         result = await session.execute(select(QuizQuestion).limit(20))
         questions = list(result.scalars().all())
-    
+
     if not questions:
         await cb.message.answer("❌ لا توجد أسئلة.", reply_markup=questions_admin_kb())
         return
-    
+
     text = "📋 آخر 20 سؤال:\n\n"
     for q in questions:
         text += f"{q.id}. {q.text_raw[:50]}... | {q.correct_answer}\n"
-    
+
     await cb.message.answer(text, reply_markup=questions_admin_kb())
     await cb.answer()
 
@@ -396,9 +421,7 @@ async def admin_add_question(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminStates.await_price_value)
     await state.update_data(price_mode="add_question")
     await cb.message.answer(
-        "أرسل السؤال بالجملة:\n\n"
-        "الصيغة: سؤال | الإجابة\n"
-        "مثال: ما هي عاصمة السعودية؟ |الرياض"
+        "أرسل السؤال بالجملة:\n\n" "الصيغة: سؤال | الإجابة\n" "مثال: ما هي عاصمة السعودية؟ |الرياض"
     )
     await cb.answer()
 
