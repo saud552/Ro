@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column("star_votes", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["voting_contests.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_contest_candidate_user", name="uq_contest_candidate_user"),
+        sa.UniqueConstraint("contest_id", "user_id", name="uq_contest_candidate_user"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_voting_candidates_contest_id", "voting_candidates", ["contest_id"])
@@ -85,7 +85,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["voting_contests.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["candidate_id"], ["voting_candidates.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_vote_unique", name="uq_vote_unique"),
+        sa.UniqueConstraint("contest_id", "candidate_id", "voter_id", name="uq_vote_unique"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_voting_votes_contest_id", "voting_votes", ["contest_id"])
@@ -143,7 +143,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["deserves_contests.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["candidate_id"], ["deserves_candidates.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_deserves_vote_unique", name="uq_deserves_vote_unique"),
+        sa.UniqueConstraint("contest_id", "candidate_id", "voter_id", name="uq_deserves_vote_unique"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_deserves_votes_contest_id", "deserves_votes", ["contest_id"])
@@ -187,7 +187,7 @@ def upgrade() -> None:
         sa.Column("time_limit", sa.Integer(), nullable=False, server_default="30"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["quiz_contests.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_quiz_contest_question", name="uq_quiz_contest_question"),
+        sa.UniqueConstraint("contest_id", "question_number", name="uq_quiz_contest_question"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_quiz_questions_contest_id", "quiz_questions", ["contest_id"])
@@ -204,7 +204,7 @@ def upgrade() -> None:
         sa.Column("answered_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["quiz_contests.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["question_id"], ["quiz_questions.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_quiz_question_user", name="uq_quiz_question_user"),
+        sa.UniqueConstraint("question_id", "user_id", name="uq_quiz_question_user"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_quiz_answers_contest_id", "quiz_answers", ["contest_id"])
@@ -220,7 +220,7 @@ def upgrade() -> None:
         sa.Column("correct_answers", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["contest_id"], ["quiz_contests.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_quiz_contest_user_score", name="uq_quiz_contest_user_score"),
+        sa.UniqueConstraint("contest_id", "user_id", name="uq_quiz_contest_user_score"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_quiz_participant_scores_contest_id", "quiz_participant_scores", ["contest_id"])
@@ -236,7 +236,7 @@ def upgrade() -> None:
         sa.Column("points_earned", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["referrer_id"], ["users.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("uq_referred_user", name="uq_referred_user"),
+        sa.UniqueConstraint("referred_id", name="uq_referred_user"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_referrals_referrer_id", "referrals", ["referrer_id"])
