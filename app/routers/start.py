@@ -11,11 +11,7 @@ from sqlalchemy import select
 from ..config import settings
 from ..db import get_async_session
 from ..db.models import Notification, Roulette, User
-from ..keyboards.common import (
-    gate_kb,
-    start_menu_kb,
-    subscription_menu_kb,
-)
+from ..keyboards.common import gate_kb, start_menu_kb, subscription_menu_kb
 from ..services.context import runtime
 from ..services.payments import grant_monthly, grant_one_time, has_gate_access
 from .my import my_draws_command

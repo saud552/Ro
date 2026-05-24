@@ -13,11 +13,7 @@ from aiogram.types import CallbackQuery, Message
 from ..db import get_async_session
 from ..db.models import DeservesCandidate
 from ..db.repositories import DeservesRepository
-from ..keyboards.deserves import (
-    deserves_confirm_kb,
-    deserves_controls_kb,
-    deserves_section_kb,
-)
+from ..keyboards.deserves import deserves_confirm_kb, deserves_controls_kb, deserves_section_kb
 
 deserves_router = Router(name="deserves")
 

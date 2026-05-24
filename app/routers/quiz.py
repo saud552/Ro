@@ -13,11 +13,7 @@ from aiogram.types import CallbackQuery, Message
 from ..db import get_async_session
 from ..db.models import QuizContest, QuizParticipantScore, QuizQuestion
 from ..db.repositories import QuizRepository
-from ..keyboards.quiz import (
-    quiz_confirm_kb,
-    quiz_controls_kb,
-    quiz_section_kb,
-)
+from ..keyboards.quiz import quiz_confirm_kb, quiz_controls_kb, quiz_section_kb
 
 quiz_router = Router(name="quiz")
 
