@@ -22,7 +22,8 @@ def upgrade() -> None:
         sa.Column("referral_code", sa.String(length=32), nullable=False),
         sa.Column("referral_points", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.UniqueConstraint("uq_subscription_user", name="uq_subscription_user"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("user_id", name="uq_subscription_user"),
     )
     op.create_index("ix_subscriptions_user_id", "subscriptions", ["user_id"])
 
