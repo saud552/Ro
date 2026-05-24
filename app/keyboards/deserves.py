@@ -57,9 +57,7 @@ def deserves_controls_kb(contest_id: int, is_active: bool) -> InlineKeyboardMark
             )
         ]
     )
-    rows.append(
-        [InlineKeyboardButton(text="🗑️ حذف", callback_data=f"deserves_delete:{contest_id}")]
-    )
+    rows.append([InlineKeyboardButton(text="🗑️ حذف", callback_data=f"deserves_delete:{contest_id}")])
     rows.append([InlineKeyboardButton(text="رجوع", callback_data="back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

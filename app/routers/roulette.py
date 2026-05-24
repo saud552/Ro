@@ -108,9 +108,7 @@ async def _get_user_channel_id(user_id: int) -> Optional[int]:
 def _build_channel_post_text(r: Roulette, participants_count: int) -> str:
     """Compose channel post text with styling, status line, and participants count."""
     styled = StyledText(r.text_raw, r.text_style).render()
-    status_line = (
-        "المشاركة في السحب متاحة حالياً" if r.is_open else "المشاركة في السحب متوقفة حالياً"
-    )
+    status_line = "المشاركة في السحب متاحة حالياً" if r.is_open else "المشاركة في السحب متوقفة حالياً"
     return f"{styled}\n\n{status_line}\nعدد المشاركين: {participants_count}"
 
 
@@ -728,9 +726,7 @@ async def add_gate_link(message: Message, state: FSMContext) -> None:
             return
         m_user = await message.bot.get_chat_member(c.id, message.from_user.id)
         if getattr(m_user, "status", None) not in {"creator", "administrator"}:
-            await message.answer(
-                "يجب أن تكون مشرفاً ومنحت الصلاحيات اللازمة لإضافة هذا الوجهة كشرط"
-            )
+            await message.answer("يجب أن تكون مشرفاً ومنحت الصلاحيات اللازمة لإضافة هذا الوجهة كشرط")
             return
         if runtime.bot_id is not None:
             m_bot = await message.bot.get_chat_member(c.id, runtime.bot_id)
